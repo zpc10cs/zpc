@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="gb2312"?>
+<wizard>
+	<page id="page1" type="SelectNetType" associate="ne_struc.xml">
+	<element name="enterscript" value="copy.py" />
+	<element name="exitscript" value="ne_check.py" />
+	</page>
+	
+	<!-- <page id="page2" type="Config" associate="config_compoment_config.xml" /> -->
+	
+	<page id="BASIC_CONFIG" type="Config" associate="config.xml">
+		<element name="previous_name" value="previous_btn"/>  
+		<element name="cancel_name" value="exit_btn"/>
+	    <element name="enterscript" value="enter_basic_cfg.py" /> 
+	    <element name="exitscript" value="exit_basic_cfg.py" />
+		<!-- element name="enterscript" value="enter_basic_config2.py" / -->
+		<element name="export" value="disable"/>
+		<element name="finish" value="enable"/>  
+	</page>
+	
+	<page id="page5" type="Summary"/>
+</wizard>
+
+
+

@@ -1,0 +1,194 @@
+#!/usr/bin/expect -f
+# vi:set ts=8 sw=4 noet sta:
+#
+# Author: dearvoid (MSN: dearvoid@263.net)
+#
+# $Source: /cvsroot/bin/expect/enable-auto-ssh.exp,v $
+# $Revision: 1.5 $
+#
+
+## variables
+set prefix "\033\[1;31m>>>\033\[0m"
+
+proc usage {} {
+    regsub ".*/" $::argv0 "" name
+    send_user "Usage:\n"
+    send_user "    $name \[user@]host password\n"
+    send_user "\n"
+    send_user "Report bugs to <\033\[1;31mdearvoid@263.net\033\[0m>\n"
+    exit 1
+}
+
+proc check_id_files {} {
+    if {! [file exists $::id_file]} {
+	send_user "$::prefix id file not found, try creating ...\n"
+	if {[catch { spawn ssh-keygen -t rsa } error]} {
+	    send_error "$::prefix $error\n"
+	    exit 0
+	}
+	expect -nocase -re "\(.*\):"
+	send -- "\r"
+	expect -nocase -re "passphrase.*:"
+	send -- "\r"
+	expect -nocase -re "passphrase.*again:"
+	send -- "\r"
+	expect eof
+	send_user "$::prefix id file successfully created\n"
+    }
+}
+
+proc remove_known_hosts_entry {host} {
+    regsub ".*/" $::argv0 "" name
+    set tmp_file "/tmp/$name.tmp"
+    set known_hosts "$::env(HOME)/.ssh/known_hosts"
+    send_user "$::prefix trying to remove '$host' from ~/.ssh/known_hosts ... "
+    if {[catch {
+	set fd_known_hosts [open $known_hosts r]
+	set fdTmp [open $tmp_file w]
+	while 1 {
+	    gets $fd_known_hosts line
+	    if [eof $fd_known_hosts] {
+		break
+	    }
+	    if [regexp "(\[^, ]+,)*${host}(,\[^, ]+)* " $line] {
+		continue
+	    }
+	    puts $fdTmp $line
+	}
+	close $fd_known_hosts
+	close $fdTmp
+	file rename -force $tmp_file $known_hosts
+	send_user "OK\n"
+    } error]} {
+	send_user "failed\n"
+	send_user "$::prefix $error\n"
+	exit 1
+    }
+}
+
+## get host and password from command line parameters
+if {[llength $argv] != 2} {
+    usage
+}
+set user@host [lindex $argv 0]
+set passwd [lindex $argv 1]
+
+## create public key file if not found
+set id_file "$env(HOME)/.ssh/id_rsa.pub"
+check_id_files
+
+## ssh to host
+set yes_no 0
+set ok_string SUCCESS
+set timeout 5
+set done 0
+while {!$done} {
+    spawn ssh ${user@host} echo $ok_string
+    expect {
+	-nocase -re "yes/no" {
+	    set yes_no 1
+	    send -- "yes\r"
+	    set done 1
+	}
+	-nocase -re "password: " {
+	    set done 1
+	}
+	$ok_string {
+	    send_user "$prefix ok\n"
+	    exit 0
+	}
+	"@@@@@@@@@@@@@@@@@@@@" {
+	    expect eof
+	    set indexOfAtSign [string first "@" ${user@host}]
+	    incr indexOfAtSign
+	    set hostname [string range ${user@host} $indexOfAtSign end]
+	    remove_known_hosts_entry $hostname
+	}
+	eof {
+	    send_error "$prefix failed\n"
+	    exit 1
+	}
+	timeout {
+	    send_error "$prefix timeout\n"
+	    exit 1
+	}
+    }
+}
+
+if {$yes_no} {
+    expect {
+	$ok_string {
+	    send_user "$prefix ok\n"
+	    exit 0
+	}
+	-nocase -re "password: " {}
+    }
+}
+send -- "$passwd\r"
+expect {
+    -nocase "try again" {
+	send_error "$prefix passwd error\n"
+	exit 1
+    }
+    #李博修改问题单A01D71511开始，解决密码输入错误时，再次输入密码的烦琐，改为仅有一次输入机会
+    -nocase "password:" {
+	send_error "$prefix passwd error\n"
+	exit 1
+    }
+    #李博修改问题单A01D71511结束
+    $ok_string {}
+}
+expect eof
+
+## append public key file to remote host's ~/.ssh/authorized_keys
+if {[catch {
+    set IDFILE [open $id_file RDONLY]
+    set pub_key [read $IDFILE]
+    close $IDFILE
+} error]} {
+    send_error "$prefix $error\n"
+    exit 1
+}
+
+#家目录权限默认700，如果建立信任关系的用户不是root用户，设置家目录权限为755
+set homePermission 700
+set index [string first @ ${user@host}]
+set index [expr $index-1]
+if {$index!=0} {
+    set currUser [string range ${user@host} 0 $index]
+    if {$currUser!="root"} {
+        set homePermission 755
+    }
+}
+
+set pub_key [string trimright $pub_key "\r\n"]
+#修改用户家目录和.ssh目录的权限为700，权限不为700建立信任关系会失败
+spawn ssh ${user@host} "cd;chmod $homePermission .; mkdir -p .ssh; chmod $homePermission .ssh; echo '$pub_key' >> .ssh/authorized_keys"
+expect -nocase -re "password:"
+send -- "$passwd\r"
+expect eof
+
+#使用ssh登录一次，校验信任关系是否建立成功
+spawn ssh ${user@host} echo $ok_string
+expect {
+    -nocase -re "yes/no" {	    
+	    send_user "\nauthenticating relation failed\n"
+	    exit 1
+	}
+	-nocase -re "password: " {
+	    send_user "\nauthenticating relation failed\n"
+	    exit 1
+	}
+	$ok_string {
+	    send_user "\nauthenticating relation OK\n"
+	    exit 0
+	}
+	eof {
+	    send_user "\nauthenticating relation failed\n"
+	    exit 1
+	}
+}
+expect eof
+## THE END
+
+

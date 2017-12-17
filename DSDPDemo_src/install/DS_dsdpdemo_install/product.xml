@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="gb2312"?>
+<product name="DSDPDEMO" desc="DSDP solution" ideploy-version="BREEZE_IDEPLOY_V100R001C04B36">
+	<properties>
+		<property name="config_reference_mode" value="ne"/>
+		<property name="package_reference_mode" value="ne"/>
+		<property name="hangup" value="false"/>
+		<property name="login_log_filter" value="true"/>
+		<property name="default_level_of_log" value="INFO"/>
+		<property name="enableRollback" value="true"/>
+		<property name="enablePause" value="false"/>
+		<property name="task_execute_priority" value="56"/>
+		<property name="task_rollback_mode" value="task_rollback"/>
+	</properties>
+</product>
+

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/dsdp.demo.iml" filepath="$PROJECT_DIR$/dsdp.demo.iml" />
+      <module fileurl="file://$PROJECT_DIR$/dsdp.demo.business/dsdp.demo.business.iml" filepath="$PROJECT_DIR$/dsdp.demo.business/dsdp.demo.business.iml" />
+      <module fileurl="file://$PROJECT_DIR$/dsdp.demo.business.impl/dsdp.demo.business.impl.iml" filepath="$PROJECT_DIR$/dsdp.demo.business.impl/dsdp.demo.business.impl.iml" />
+      <module fileurl="file://$PROJECT_DIR$/dsdp.demo.dao/dsdp.demo.dao.iml" filepath="$PROJECT_DIR$/dsdp.demo.dao/dsdp.demo.dao.iml" />
+      <module fileurl="file://$PROJECT_DIR$/dsdp.demo.dao.impl/dsdp.demo.dao.impl.iml" filepath="$PROJECT_DIR$/dsdp.demo.dao.impl/dsdp.demo.dao.impl.iml" />
+      <module fileurl="file://$PROJECT_DIR$/dsdp.demo.dependency/dsdp.demo.dependency.iml" filepath="$PROJECT_DIR$/dsdp.demo.dependency/dsdp.demo.dependency.iml" />
+      <module fileurl="file://$PROJECT_DIR$/dsdp.demo.integrate.test/dsdp.demo.integrate.test.iml" filepath="$PROJECT_DIR$/dsdp.demo.integrate.test/dsdp.demo.integrate.test.iml" />
+      <module fileurl="file://$PROJECT_DIR$/dsdp.demo.service/dsdp.demo.service.iml" filepath="$PROJECT_DIR$/dsdp.demo.service/dsdp.demo.service.iml" />
+      <module fileurl="file://$PROJECT_DIR$/dsdp.demo.service.impl/dsdp.demo.service.impl.iml" filepath="$PROJECT_DIR$/dsdp.demo.service.impl/dsdp.demo.service.impl.iml" />
+      <module fileurl="file://$PROJECT_DIR$/dsdp.demo.ut.frame/dsdp.demo.ut.frame.iml" filepath="$PROJECT_DIR$/dsdp.demo.ut.frame/dsdp.demo.ut.frame.iml" />
+    </modules>
+  </component>
+</project>

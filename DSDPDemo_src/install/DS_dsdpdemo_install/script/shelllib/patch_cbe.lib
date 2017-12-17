@@ -1,0 +1,91 @@
+#!/bin/ksh
+
+################################################################################
+# Name       : patch_cbe.lib
+# Describe   : the function as follows is specially for cbe
+# Date       : 2011-10-11
+# Functions  : is_Original_Host_Standby
+#              is_cbe_update_exclude_file      
+################################################################################
+typeset isOriginalHostStandby="true"
+typeset excludeDirlist="bin config data ext/cbe/data/Datasync ext/cbe/phydbsyn ext/cbe/recdata ext/cbe/record ext/dssync/data/exeagent service/app/servicefile"
+
+if [ -h ${HOME}/bin ];then
+    ls -l ${HOME}/bin/ > /dev/null 2>&1
+    if [ $? -ne 0 ];then
+        isOriginalHostStandby="false"
+        install_log DEBUG "cbe" "the value of isOriginalHostStandby is false."
+    fi
+fi
+
+################################################################################
+# name    : is_Original_Host_Standby
+# describe: judge whether the current node is original host or standby
+# input   : null
+# output  : null
+# return  : 0 yes
+#           2 no
+################################################################################
+function is_Original_Host_Standby
+{
+    if [ "x${isOriginalHostStandby}" = "xfalse" ];then
+        return 2
+    fi
+    
+    return 0
+}
+
+################################################################################
+# name    : is_cbe_update_exclude_file
+# describe: judge whether it is matched exclude file
+# input   : $1 dir_param
+# output  : null
+# return  : 0 yes
+#           2 no
+################################################################################
+function is_cbe_update_exclude_file
+{
+    typeset dir_param="$1"
+    
+    for tmpdir in ${excludeDirlist}
+    do
+        echo "${dir_param}" | grep "^${tmpdir}" > /dev/null
+        if [ $? -eq 0 ];then
+            typeset remanent_dir=$(echo "${dir_param}" | sed "s#^${tmpdir}##")
+            if [ "x${remanent_dir}" != "x" ];then
+                echo "${remanent_dir}"|grep "^/" > /dev/null
+                if [ $? -ne 0 ];then
+                    return 2
+                fi
+            fi
+            install_log INFO "cbe" "it is cbe standby node and match excludeDirlist, so skip it."
+            return 0            
+        fi
+    done
+    
+    return 2
+}
+
+################################################################################
+# name    : is_update_exclude_file
+# describe: this function is for cbe customize update only,
+#           to judge whether it is matched exclude file
+# input   : $1 tmp_param
+# output  : null
+# return  : 0 yes
+#           2 no
+################################################################################
+function is_update_exclude_file
+{
+    typeset tmp_param="$1"
+    
+    is_Original_Host_Standby
+    if [ $? -ne 0 ];then
+        is_cbe_update_exclude_file ${tmp_param}
+        if [ $? -eq 0 ];then
+            return 0
+        fi
+    fi
+    
+    return 2
+}

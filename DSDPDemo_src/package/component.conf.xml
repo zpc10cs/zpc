@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component>
+	<fileSets>
+		<fileSet>
+			<directory>conf</directory>
+			<useDefaultExcludes>true</useDefaultExcludes>
+			<outputDirectory>dsdpdemo/conf</outputDirectory>
+			<includes>
+				<include>**/*</include>
+			</includes>
+			<fileMode>0700</fileMode>
+		</fileSet>
+		<fileSet>
+			<directory>version</directory>
+			<useDefaultExcludes>true</useDefaultExcludes>
+			<outputDirectory>dsdpdemo/version</outputDirectory>
+			<includes>
+				<include>*</include>
+			</includes>
+			<fileMode>0700</fileMode>
+		</fileSet>
+		<fileSet>
+			<directory>install/ideploy</directory>
+			<useDefaultExcludes>true</useDefaultExcludes>
+			<outputDirectory>ideploy</outputDirectory>
+			<includes>
+				<include>**/*</include>
+			</includes>
+			<fileMode>0700</fileMode>
+		</fileSet>
+	</fileSets>
+</component>

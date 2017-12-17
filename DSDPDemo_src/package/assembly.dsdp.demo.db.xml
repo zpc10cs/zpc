@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<assembly>
+	<id>DSDPDEMODB_V500R005C00</id>
+	<formats>
+		<format>tar.gz</format>
+	</formats>
+	<includeBaseDirectory>false</includeBaseDirectory>
+	<includeSiteDirectory>false</includeSiteDirectory>
+	<fileSets>
+		<fileSet>
+			<directory>dbscripts</directory>
+			<useDefaultExcludes>true</useDefaultExcludes>
+			<outputDirectory>dsdpdemo_db</outputDirectory>
+			<includes>
+				<include>*</include>
+			</includes>
+			<excludes>
+				<exclude>install_oracle.sql</exclude>
+			</excludes>
+			<fileMode>0700</fileMode>
+		</fileSet>
+	</fileSets>
+</assembly>

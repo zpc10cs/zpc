@@ -1,0 +1,183 @@
+<project name="DSDP_DEMO" default="build" basedir="../">
+	<property file="${basedir}/CI/build.properties" />
+	<property name="lib.dir" value="${basedir}/lib" />
+
+	<tstamp>
+		<format property="touch.time" pattern="yyyy-MM-dd HH:mm:ss" />
+	</tstamp>
+
+	<!--获取编译所需lib的路径-->
+	<path id="libPath">
+		<fileset dir="${lib.dir}">
+			<include name="**/*.jar" />
+		</fileset>
+	</path>
+
+	<target name="build">
+		<antcall target="bulidAllJar" />
+	</target>
+
+	<!--打新的jar包，在打新的jar包前要先编译-->
+	<target name="bulidAllJar">
+		<antcall target="complie dsdp.demo.business" />
+		<antcall target="build dsdp.demo.business" />
+
+		<antcall target="complie dsdp.demo.business.impl" />
+		<antcall target="build dsdp.demo.business.impl" />
+
+		<antcall target="complie dsdp.demo.dao" />
+		<antcall target="build dsdp.demo.dao" />
+
+		<antcall target="complie dsdp.demo.dao.impl" />
+		<antcall target="build dsdp.demo.dao.impl" />
+
+		<antcall target="complie dsdp.demo.service" />
+		<antcall target="build dsdp.demo.service" />
+
+		<antcall target="complie dsdp.demo.service.impl" />
+		<antcall target="build dsdp.demo.service.impl" />
+	</target>
+	<!-- 编译dsdp.demo.business -->
+	<target name="complie dsdp.demo.business">
+		<delete dir="${dsdp.demo.business}/target" />
+		<mkdir dir="${dsdp.demo.business}/target" />
+		<javac source="1.6" target="1.6" debuglevel="vars,source,lines" srcdir="${dsdp.demo.business}/src/main/java" destdir="${dsdp.demo.business}/target" encoding="UTF-8" debug="true" includeantruntime="true">
+			<classpath refid="libPath" />
+		</javac>
+	</target>
+
+	<!-- 打dsdp.demo.business包-->
+	<target name="build dsdp.demo.business" depends="complie dsdp.demo.business">
+		<delete file="${lib.dir}/dsdpdemo/dsdp.demo.business.jar" failonerror="false" />
+		<jar jarfile="${lib.dir}/dsdpdemo/dsdp.demo.business.jar">
+			<manifest>
+				<attribute name="SysName" value="${component.name}" />
+				<attribute name="Version" value="${version}" />
+				<attribute name="Build-date" value="${touch.time}" />
+			</manifest>
+			<fileset dir="${dsdp.demo.business}/target" includes="**/*.class" />
+		</jar>
+	</target>
+
+	<!-- 编译dsdp.demo.business.impl -->
+	<target name="complie dsdp.demo.business.impl">
+		<delete dir="${dsdp.demo.business.impl}/target" />
+		<mkdir dir="${dsdp.demo.business.impl}/target" />
+		<javac source="1.6" target="1.6" debuglevel="vars,source,lines" srcdir="${dsdp.demo.business.impl}/src/main/java" destdir="${dsdp.demo.business.impl}/target" encoding="UTF-8" debug="true" includeantruntime="true">
+			<classpath refid="libPath" />
+		</javac>
+	</target>
+
+	<!-- 打dsdp.demo.business.impl包-->
+	<target name="build dsdp.demo.business.impl" depends="complie dsdp.demo.business.impl">
+		<delete file="${lib.dir}/dsdpdemo/dsdp.demo.business.impl.jar" failonerror="false" />
+		<jar jarfile="${lib.dir}/dsdpdemo/dsdp.demo.business.impl.jar">
+			<manifest>
+				<attribute name="SysName" value="${component.name}" />
+				<attribute name="Version" value="${version}" />
+				<attribute name="Build-date" value="${touch.time}" />
+			</manifest>
+			<fileset dir="${dsdp.demo.business.impl}/target" includes="**/*.class" />
+			<fileset dir="${dsdp.demo.business.impl}/src/main/resources">
+				<include name="**/*" />
+			</fileset>
+		</jar>
+	</target>
+
+	<!-- 编译dsdp.demo.dao -->
+	<target name="complie dsdp.demo.dao">
+		<delete dir="${dsdp.demo.dao}/target" />
+		<mkdir dir="${dsdp.demo.dao}/target" />
+		<javac source="1.6" target="1.6" debuglevel="vars,source,lines" srcdir="${dsdp.demo.dao}/src/main/java" destdir="${dsdp.demo.dao}/target" encoding="UTF-8" debug="true" includeantruntime="true">
+			<classpath refid="libPath" />
+		</javac>
+	</target>
+
+	<!-- 打dsdp.demo.dao包-->
+	<target name="build dsdp.demo.dao" depends="complie dsdp.demo.dao">
+		<delete file="${lib.dir}/dsdpdemo/dsdp.demo.dao.jar" failonerror="false" />
+		<jar jarfile="${lib.dir}/dsdpdemo/dsdp.demo.dao.jar">
+			<manifest>
+				<attribute name="SysName" value="${component.name}" />
+				<attribute name="Version" value="${version}" />
+				<attribute name="Build-date" value="${touch.time}" />
+			</manifest>
+			<fileset dir="${dsdp.demo.dao}/target" includes="**/*.class" />
+		</jar>
+	</target>
+
+	<!-- 编译dsdp.demo.dao.impl -->
+	<target name="complie dsdp.demo.dao.impl">
+		<delete dir="${dsdp.demo.dao.impl}/target" />
+		<mkdir dir="${dsdp.demo.dao.impl}/target" />
+		<javac source="1.6" target="1.6" debuglevel="vars,source,lines" srcdir="${dsdp.demo.dao.impl}/src/main/java" destdir="${dsdp.demo.dao.impl}/target" encoding="UTF-8" debug="true" includeantruntime="true">
+			<classpath refid="libPath" />
+		</javac>
+	</target>
+
+	<!-- 打dsdp.demo.dao.impl包-->
+	<target name="build dsdp.demo.dao.impl" depends="complie dsdp.demo.dao">
+		<delete file="${lib.dir}/dsdpdemo/dsdp.demo.dao.impl.jar" failonerror="false" />
+		<jar jarfile="${lib.dir}/dsdpdemo/dsdp.demo.dao.impl.jar">
+			<manifest>
+				<attribute name="SysName" value="${component.name}" />
+				<attribute name="Version" value="${version}" />
+				<attribute name="Build-date" value="${touch.time}" />
+			</manifest>
+			<fileset dir="${dsdp.demo.dao.impl}/target" includes="**/*.class" />
+			<fileset dir="${dsdp.demo.dao.impl}/src/main/resources">
+				<include name="**/*" />
+			</fileset>
+		</jar>
+	</target>
+
+	<!-- 编译dsdp.demo.service -->
+	<target name="complie dsdp.demo.service">
+		<delete dir="${dsdp.demo.service}/target" />
+		<mkdir dir="${dsdp.demo.service}/target" />
+		<javac source="1.6" target="1.6" debuglevel="vars,source,lines" srcdir="${dsdp.demo.service}/src/main/java" destdir="${dsdp.demo.service}/target" encoding="UTF-8" debug="true" includeantruntime="true">
+			<classpath refid="libPath" />
+		</javac>
+	</target>
+
+	<!-- 打dsdp.demo.service-->
+	<target name="build dsdp.demo.service" depends="complie dsdp.demo.service">
+		<delete file="${lib.dir}/dsdpdemo/dsdp.demo.service.jar" failonerror="false" />
+		<jar jarfile="${lib.dir}/dsdpdemo/dsdp.demo.service.jar">
+			<manifest>
+				<attribute name="SysName" value="${component.name}" />
+				<attribute name="Version" value="${version}" />
+				<attribute name="Build-date" value="${touch.time}" />
+			</manifest>
+			<fileset dir="${dsdp.demo.service}/target" includes="**/*.class" />
+		</jar>
+	</target>
+
+
+	<!-- 编译dsdp.demo.service.impl -->
+	<target name="complie dsdp.demo.service.impl">
+		<delete dir="${dsdp.demo.service.impl}/target" />
+		<mkdir dir="${dsdp.demo.service.impl}/target" />
+		<javac source="1.6" target="1.6" debuglevel="vars,source,lines" srcdir="${dsdp.demo.service.impl}/src/main/java" destdir="${dsdp.demo.service.impl}/target" encoding="UTF-8" debug="true" includeantruntime="true">
+			<classpath refid="libPath" />
+		</javac>
+	</target>
+
+	<!-- 打dsdp.demo.service.impl-->
+	<target name="build dsdp.demo.service.impl" depends="complie dsdp.demo.service.impl">
+		<delete file="${lib.dir}/dsdpdemo/dsdp.demo.service.impl.jar" failonerror="false" />
+		<jar jarfile="${lib.dir}/dsdpdemo/dsdp.demo.service.impl.jar">
+			<manifest>
+				<attribute name="SysName" value="${component.name}" />
+				<attribute name="Version" value="${version}" />
+				<attribute name="Build-date" value="${touch.time}" />
+			</manifest>
+			<fileset dir="${dsdp.demo.service.impl}/target" includes="**/*.class" />
+			<fileset dir="${dsdp.demo.service.impl}/src/main/resources">
+				<include name="**/*" />
+			</fileset>
+		</jar>
+	</target>
+
+</project>
+

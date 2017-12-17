@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="gb2312"?>
+<pkg_info name="LocalTerminal1" desc="LocalTerminal1_desc" break="false">
+	<step_list display="false">		
+		
+		<!-- 安装前检查 -->
+		<step name="checkenv" desc="checkenv_desc" break="false" re_execute_mode="AllHostFromFirstCmd">
+            <exec cmd="su - root" args="" desc="change user" timeout="60000"/>
+            <exec cmd="check_env.sh" desc="check env" timeout="600000"/>
+		</step>
+		
+		<!-- 安装数据库-->        
+		<step name="install_db" desc="install_db_desc" break="false">
+			<exec cmd="su - root" args="" desc="change user" timeout="60000"/>
+			<exec cmd="install_db.sh" desc="install_db" timeout="600000"/>
+		</step>
+		
+		<!-- 安装teastore   
+		<step name="install_teastore" desc="install_desc" break="false">
+			<exec cmd="su - root" args="" desc="change user" timeout="60000"/>
+			<exec cmd="install_teastore.sh" desc="install" timeout="600000"/>
+		</step>
+		 -->     
+		
+		<!-- 创建应用用户  -->        
+		<step name="install_commons" desc="install_commons_desc" break="false">
+			<exec cmd="su - root" args="" desc="change user" timeout="60000"/>
+			<exec cmd="install_commons.sh"  desc="install_commons" timeout="600000"/>
+		</step>
+		
+        <!-- 核心组件安装 -->        
+		<step name="install_dsdp" desc="install_desc" break="false">
+			<exec cmd="su - root" args="" desc="change user" timeout="60000"/>
+			<exec cmd="install_dsdp.sh" desc="install_dsdp" timeout="600000"/>
+		</step>
+	
+        <!-- 启动 -->
+		<step name="start" desc="start_desc" break="false">
+		<exec cmd="su - root" args="" desc="change user" timeout="60000"/>
+		<exec cmd="start_dsdp.sh" desc="start" timeout="600000"/>
+		</step>
+		
+		<!-- 状态测试 -->
+		<step name="status_test" desc="status_test_desc" break="false">
+		<exec cmd="su - root" args="" desc="change user" timeout="60000"/>
+		<exec cmd="dsdp_status_check.sh" args="status" desc="status" timeout="60000"/>
+		</step>
+
+		
+		<!-- 卸载 -->
+		<step name="uninstall" desc="uninstall_desc" break="true" alert="warn_uninstall">
+		<exec cmd="su - root" args="" desc="change user" timeout="60000"/>
+		<exec cmd="uninstall.sh" args="uninstall" desc="uninstall" timeout="300000"/>
+		</step>
+    </step_list>
+
+	<config>
+		<configType>default</configType>
+		<customPkg>true</customPkg>
+	</config>
+</pkg_info>
+
+

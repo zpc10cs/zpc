@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<assembly>
+	<id>DSDPDEMO_V500R005C00</id>
+	<formats>
+		<format>tar.gz</format>
+	</formats>
+	<includeBaseDirectory>false</includeBaseDirectory>
+	<includeSiteDirectory>false</includeSiteDirectory>
+	<componentDescriptors>
+		<componentDescriptor>package/component.conf.xml
+		</componentDescriptor>
+		<componentDescriptor>package/component.all.dsdp.demo.jars.xml
+		</componentDescriptor>		
+	</componentDescriptors>
+</assembly>

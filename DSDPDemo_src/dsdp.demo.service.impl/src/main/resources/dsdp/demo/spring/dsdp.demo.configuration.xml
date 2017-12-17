@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:util="http://www.springframework.org/schema/util" xmlns:dsf="http://www.huawei.com/schema/dsf"
+	xsi:schemaLocation=" 
+        http://www.springframework.org/schema/beans 
+        http://www.springframework.org/schema/beans/spring-beans-3.0.xsd 
+        http://www.springframework.org/schema/util 
+        http://www.springframework.org/schema/util/spring-util-3.0.xsd 
+        http://www.huawei.com/schema/dsf 
+        http://www.huawei.com/schema/dsf/spring-dsf-1.0.xsd">
+
+	<bean id="dsdpdemo.zkPropertiesFactoryBean"
+		class="com.huawei.jaguar.commons.sdk.configuration.spring.ZKPropertiesFactoryBean">
+		<property name="zkName" value="dsdpdemo.configerZKClient" />
+		<property name="zkClientFactory" ref="commons.zkClientFactory"></property>
+		<property name="zkPaths">
+			<list>
+				<value>/config/dsdpdemo/resource</value>
+				<value>/config/dsdpdemo/serviceConfig</value>
+			</list>
+		</property>
+	</bean>
+
+	<bean id="dsdpdemo.zkPropertyPlaceHolderConfigurer"
+		class="com.huawei.jaguar.commons.sdk.configuration.spring.ZKPropertyPlaceholderConfigurer">
+		<property name="locations">
+			<list>
+				<value>classpath*:dsdpdemo.resource.properties</value>
+				<value>classpath*:dsdpdemo.serviceConfig.properties</value>
+				<value>classpath*:dsdpdemo.localConfig.properties</value>
+				<value>classpath*:dsf.dynamic.config.properties</value>
+			</list>
+		</property>
+		<property name="resourcePatter"
+			value="url|username|password|initialSize|maxActive|maxIdle|minIdle|maxWait|defaultAutoCommit|removeAbandoned|removeAbandonedTimeout|validationQuery|testWhileIdle|timeBetweenEvictionRunsMillis|numTestsPerEvictionRun"></property>
+		<property name="keyPatter" value="dsdpdemodb\[[0-9]*\].connect"></property>
+		<property name="localOverride" value="true" />
+		<property name="properties" ref="dsdpdemo.zkPropertiesFactoryBean" />
+		<property name="ignoreUnresolvablePlaceholders" value="true" />
+	</bean>
+
+	<bean id="dsdpdemo.dbPasswordRefreshFilter"
+		class="com.huawei.jaguar.dsdp.demo.service.config.DBPasswordRefreshFilter"></bean>
+
+	<bean id="dsdpdemo.dataSourceRefreshProxy"
+		class="com.huawei.jaguar.commons.sdk.configuration.proxy.DataSourceRefershProxy"
+		init-method="initConnectionListener">
+		<property name="awareClass" value="org.apache.commons.dbcp.BasicDataSource"></property>
+		<property name="acceptPaths">
+			<list>
+				<value>/config/dsdpdemo/resource</value>
+			</list>
+		</property>
+		<property name="refreshFilter" ref="dsdpdemo.dbPasswordRefreshFilter"></property>
+		<property name="context" ref="commons.springContext"></property>
+		<property name="connectionName" value="dsdpdemo.configerZKClient"></property>
+		<property name="zkClientFactory" ref="commons.zkClientFactory"></property>
+		<property name="keyPatter" value="dsdpdemodb\[[0-9]*\].connect"></property>
+		<property name="resourcePatter"
+			value="url|username|password|initialSize|maxActive|maxIdle|minIdle|maxWait|defaultAutoCommit|removeAbandoned|removeAbandonedTimeout|validationQuery|testWhileIdle|timeBetweenEvictionRunsMillis|numTestsPerEvictionRun"></property>
+		<property name="template" value="dsdpdemodb[{0}].connect"></property>
+	</bean>
+
+	<bean id="dsdpdemo.redisRefreshProxy"
+		class="com.huawei.jaguar.dsdp.demo.service.config.RedisRefreshProxy"
+		init-method="initConnectionListener">
+		<property name="acceptPath" value="/config/dsdpdemo/resource/redis.connect" />
+		<property name="connectionName" value="dsdpdemo.configerZKClient"></property>
+		<property name="redisCacheManager" ref="dsdpdemo.redisCacheManager"></property>
+		<property name="zkClientFactory" ref="commons.zkClientFactory"></property>
+	</bean>
+
+	<bean id="dsdpdemo.checkAppStatusService"
+		class="com.huawei.jaguar.dsdp.demo.service.dfx.status.CheckStatusServiceImpl"
+		init-method="init">
+		<property name="connectionName" value="dsdpdemo.configerZKClient"></property>
+		<property name="redisCacheManager" ref="dsdpdemo.redisCacheManager"></property>
+		<property name="dbHealthDao" ref="dsdpdemo.dbHealthDao" />
+		<property name="zkClientFactory" ref="commons.zkClientFactory"></property>
+	</bean>
+
+	<bean id="dsdpdemo.serviceConfigRefreshProxy"
+		class="com.huawei.jaguar.dsdp.demo.service.config.ServiceConfigRefreshProxy"
+		init-method="init">
+		<property name="springContext" ref="commons.springContext" />
+		<property name="connectionName" value="dsdpdemo.configerZKClient" />
+		<property name="zkClientFactory" ref="commons.zkClientFactory" />
+		<property name="serviceConfigs">
+			<list>
+				<ref bean="dsdpdemo.serviceConfig.serviceConfigRefreshExample"></ref>
+			</list>
+		</property>
+	</bean>
+
+	<bean id="dsdpdemo.serviceConfigRefreshExample"
+		class="com.huawei.jaguar.dsdp.demo.service.config.ServiceConfigRefreshExample">
+		<property name="value" value="${dsdpdemo.serviceConfigExample.value}" />
+	</bean>
+
+	<bean id="dsdpdemo.serviceConfig.serviceConfigRefreshExample"
+		class="com.huawei.jaguar.dsdp.demo.service.config.ServiceConfig">
+		<property name="path"
+			value="/config/dsdpdemo/serviceConfig/dsdpdemo.serviceConfigExample.value" />
+		<property name="beanId" value="dsdpdemo.serviceConfigRefreshExample" />
+		<property name="propertyName" value="value" />
+	</bean>
+</beans>

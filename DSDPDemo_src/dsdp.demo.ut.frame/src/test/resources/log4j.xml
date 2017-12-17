@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE log4j:configuration SYSTEM "log4j.dtd">
+
+<log4j:configuration xmlns:log4j='http://jakarta.apache.org/log4j/'>
+
+	<appender name="STDOUT" class="org.apache.log4j.ConsoleAppender">
+		<layout class="com.huawei.bme.commons.log4j.BMEPatternLayout">
+			<param name="ConversionPattern"
+				value="%d|%X{level}|%X{moduleName}|%X{traceID}|%m|%X{appendInfo}|%X{exceptionMessage}| %X{fullInfo} %n" />
+		</layout>
+	</appender>
+	
+	<appender name="DEP_STARTER_LOG"
+		class="com.huawei.bme.commons.util.BMERollingFileAppender">
+		<param name="File" value="./logs/debug/dsdpdemo_debug.log" />
+		<param name="MaxFileSize" value="10MB" />
+		<param name="MaxBackupIndex" value="10" />
+		<layout
+			class="com.huawei.bme.commons.log4j.BMEPatternLayout">
+			<param name="ConversionPattern"
+				value="%d|%X{level}|%X{moduleName}|%X{traceID}|%m|%X{appendInfo}|%X{exceptionMessage}|%X{fullInfo} %n" />
+		</layout>
+	</appender>
+	
+	<category name="com.huawei.jaguar.commons" additivity="false">
+		<priority value="ERROR" />
+		<appender-ref ref="DEP_STARTER_LOG" />
+	</category>
+
+	
+	<root>
+		<priority value="ERROR" />
+		<appender-ref ref="STDOUT" />
+	</root>
+</log4j:configuration>
+

@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:util="http://www.springframework.org/schema/util" xmlns:dsf="http://www.huawei.com/schema/dsf"
+	xsi:schemaLocation="
+        http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+        http://www.springframework.org/schema/util
+        http://www.springframework.org/schema/util/spring-util-3.0.xsd
+        http://www.huawei.com/schema/dsf
+        http://www.huawei.com/schema/dsf/spring-dsf-1.0.xsd">
+
+	<bean id="dsdpdemo.passwordDecoder"
+		class="com.huawei.jaguar.dsdp.demo.service.config.DataSourcePostProcessor" />
+
+	<bean id="dsdpdemo.jedisPoolConfig" class="redis.clients.jedis.JedisPoolConfig">
+		<property name="minIdle" value="${dsdpdemo.redis.pool.minIdle}" />
+		<property name="maxIdle" value="${dsdpdemo.redis.pool.maxIdle}" />
+		<property name="maxTotal" value="${dsdpdemo.redis.pool.maxTotal}" />
+		<property name="maxWaitMillis" value="${dsdpdemo.redis.pool.maxWaitMillis}" />
+		<property name="testOnBorrow" value="${dsdpdemo.redis.pool.testOnBorrow}" />
+		<property name="connectionTimeout" value="${dsdpdemo.redis.pool.connectionTimeout}" />
+		<property name="soTimeout" value="${dsdpdemo.redis.pool.soTimeout}" />
+		<property name="singleKeyTimeOut" value="${dsdpdemo.redis.pool.singleKeyTimeOut}" />
+		<property name="mutiKeyTimeOut" value="${dsdpdemo.redis.pool.mutiKeyTimeOut}" />
+	</bean>
+
+	<bean id="dsdpdemo.redisCacheManager"
+		class="com.huawei.jaguar.commons.sdk.data.integrate.impl.cache.RedisCacheManagerImpl"
+		init-method="init">
+		<property name="jedisPoolConfig" ref="dsdpdemo.jedisPoolConfig" />
+		<property name="connectUrls" value="${redis.connect}" />
+	</bean>
+
+	<bean id="dsdpdemo.itemService"
+		class="com.huawei.jaguar.dsdp.demo.service.dsf.impl.ItemServiceImpl">
+		<property name="itemDao" ref="dsdpdemo.itemDao" />
+	</bean>
+
+	<bean id="dsdpdemo.dsfFlowControlBean"
+		class="com.huawei.jaguar.commons.sdk.configuration.spring.DsfFlowControlBean"
+		init-method="initConnectionListener">
+		<property name="zkClientUtil" ref="dsdpdemo.zkClientUtil" />
+		<property name="connectionName" value="dsdpdemo.configerZKClient" />
+		<property name="flowControlService" value="/config/dsdpdemo/flowcontrol/service" />
+		<property name="flowControlMethod" value="/config/dsdpdemo/flowcontrol/method" />
+	</bean>
+
+	<bean id="dsdpdemo.zkClientUtil"
+		class="com.huawei.jaguar.commons.sdk.configuration.utils.ZKClientUtil"
+		init-method="initClient">
+		<property name="zkClientFactory" ref="commons.zkClientFactory" />
+		<property name="connectionName" value="dsdpdemo.configerZKClient" />
+	</bean>
+
+
+
+
+</beans>

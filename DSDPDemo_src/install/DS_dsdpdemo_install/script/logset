@@ -1,0 +1,133 @@
+#!/bin/sh 
+
+function show_help
+{	
+	echo "Usage:  logset -m <moduleName> <logtype> <loglevel>  -p <port> [OPTIONS]"
+	echo "Example:"
+	echo "    logset -m content runtime WARN -p 6912   "
+	echo "Mandatory arguments:"
+	echo "<moduleName>     :Module name to be set."
+	echo "<logtype>        :Log type to be set."
+	echo "<port>           :the server lintening port."
+	echo "Available:ALL|DEBUG|RUN|INTERFACE|RUNTIME|SECURITY|OPERATION|STATE|TRACELINK|ASYNCTRACELINK"
+	echo "                      "all" for all log type."
+	echo "<loglevel>     :Log level or switch to be set."
+	echo "                      use level OFF|CRITICAL|ERROR|WARN|INFO|DEBUG|RESUME."
+	echo "OPTIONS:"
+	echo "    -t    time the change lasts, unit is second."
+	echo "                      "	
+	echo "    -c    specify the category to change the log level."
+	echo "                      "
+	echo "    -f    whether write the change to log4j.xml if "-t" appeared, this is not available.Available value :false|true"
+	echo " 																													 "
+}
+
+
+typeset para=$1
+typeset comp_name=$2
+
+# shell file path
+APP_HOME=$(cd "$(dirname "$0")"; pwd)
+
+#check comp name; right 0, wrong 1
+CheckCompName()
+{
+    #compNameList="sns upm content product charging publicinfo campaign plmf order subscribe all "
+	compNameList=`cat $APP_HOME/compinfo.cfg | grep "\["  | awk -F '[' '{print $2}' | awk -F ']' '{print $1}'` 
+	compNameList="all "$compNameList
+    for line in $compNameList
+        do
+            if [ "$line" = "$1" ]; then
+                return 0 
+            fi  
+        done
+    
+    return 1
+}
+
+if [ "X${para}" != "X-m" ];then
+	show_help
+	exit 1
+else
+	CheckCompName $comp_name
+	if [ $? -ne 0 ];then
+		echo "ERROR:" "Module name \"${comp_name}\" does not exist."
+		exit 1
+	fi
+fi
+
+#input parameter must contain -p
+flag=0
+for each in $@
+do
+if [ "x$each" = "x-p" ]; then
+    flag=1
+fi
+done
+
+if [ "x$flag" = "x0" ]; then
+    show_help
+	exit 1
+fi
+
+#iterate the input parameter  
+sum=1
+for line in $*
+    do
+        let "sum=$sum + 1"
+        
+        if [ "$line" = "-p" ]; then
+            port=${!sum}
+        fi  
+        
+    done
+if [ "x$port" = "x" ]; then
+    show_help
+	exit 1
+fi
+	
+	
+shift;shift;
+PARAM=$@
+
+
+
+
+
+# get libpath from compinfo.cfg
+GetCompPath()
+{
+	tempFileName=tmp_file_`date +%s`.bak
+            
+    #read compinfo.cfg
+	awk -F# '{print $1}' "$APP_HOME/compinfo.cfg" |     
+	sed '/^[    ]*$/d' |                    
+	sed -n "/^[     ]*\[[   ]*$1[  ]*\]/,/^[       ]*\[.*\]/p" | 
+	sed '/^[        ]*\[.*\]/d' > $tempFileName    
+
+	comp_path=$(cat $tempFileName | grep libpath | awk -F= '{print $2}')
+	rm $tempFileName
+	echo $comp_path | sed 's/[ \r]*$//g'
+}
+
+# get confpath from compinfo.cfg
+GetConfPath()
+{
+	tempFileName=tmp_file_`date +%s`.bak
+       
+    #read compinfo.cfg
+	awk -F# '{print $1}' "$APP_HOME/compinfo.cfg" |     
+	sed '/^[    ]*$/d' |                    
+	sed -n "/^[     ]*\[[   ]*$1[  ]*\]/,/^[       ]*\[.*\]/p" | 
+	sed '/^[        ]*\[.*\]/d' > $tempFileName    
+
+	conf_path=$(cat $tempFileName | grep confpath | awk -F= '{print $2}')
+	rm $tempFileName
+	echo $conf_path | sed 's/[ \r]*$//g'
+}
+
+# Setup LOGSET_HOME
+export COMP_HOME=$(GetCompPath $comp_name)
+export CONF_HOME=$(GetConfPath $comp_name)
+
+$APP_HOME/logset.sh $PARAM

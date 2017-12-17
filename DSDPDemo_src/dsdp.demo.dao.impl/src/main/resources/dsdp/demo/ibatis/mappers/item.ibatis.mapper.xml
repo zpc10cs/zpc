@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?> 
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN"
+    "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="dsdpdemo.item">
+	<typeAlias alias="item"
+		type="com.huawei.jaguar.dsdp.demo.domain.Item" />
+		
+	<resultMap class="item" id="itemMap">
+		<result property="itemId" column="ITEMID" javaType="java.lang.Long" />
+		<result property="itemName" column="ITEMNAME" javaType="java.lang.String" />
+		<result property="itemPrice" column="ITEMPRICE" javaType="java.lang.Double" />
+		<result property="createTime" column="CREATETIME" javaType="java.util.Date" />
+		<result property="lastUpdateTime" column="LASTUPDATETIME" javaType="java.util.Date" />
+	</resultMap>
+	
+	<insert id="create" parameterClass="item">
+		insert into DSDPDEMO_T_ITEM
+			(ITEMID, ITEMNAME, ITEMPRICE, CREATETIME)
+		values
+			(#itemId#, #itemName#, #itemPrice#, sysdate)
+	</insert>
+	
+	<update id="update" parameterClass="item">
+		update DSDPDEMO_T_ITEM
+		set
+			ITEMNAME = #itemName#,
+			ITEMPRICE = #itemPrice#,
+			LASTUPDATETIME = sysdate
+		where ITEMID = #itemId#
+	</update>
+
+	<delete id="delete" parameterClass="java.lang.Long">
+		delete from DSDPDEMO_T_ITEM
+		where ITEMID = #value#
+	</delete>
+
+	<select id="retrieve" parameterClass="java.lang.Long" resultClass="item">
+		select ITEMID, ITEMNAME, ITEMPRICE, CREATETIME, LASTUPDATETIME
+		from DSDPDEMO_T_ITEM
+		where ITEMID = #value#
+	</select>
+</sqlMap> 

@@ -1,0 +1,220 @@
+#!/bin/sh 
+# ****************************************************************************
+#                                                                            *
+#  monitor.sh: This is for Jaguar Platform                                   *
+#                                                                            *
+#  Copyright by Huawei Tech. Co., Ltd.                                       *
+#  All rights reserved                                                       *
+#                                                                            *
+# ****************************************************************************
+
+function show_help
+{	
+    echo "usage:  status [-m modulename] [-s serverip:port]"
+    echo "e.g. status -m upm "
+    echo "-h         print this infomation."
+    echo "-m <arg>   modulename, content|product|order|subscribe|charging|publicinfo|upm|sns|plmf|payment|cgw|campaign|channelMgmt|marketingmgmt|tag|all"
+    echo "-s <arg>   Sets the server address, format ip:port."	
+    echo " 		 "
+}
+
+
+
+# Not set JAVA_HOME exit
+if [ -z "$JAVA_HOME" ]
+then
+    echo "JAVA_HOME not set, please set it and try again"
+    exit 1
+fi
+
+# java cmd
+if [ "x$JAVA" = "x" ]; then
+    JAVA="$JAVA_HOME/bin/java"
+fi
+
+#dirname $PWD
+
+# shell file path
+APP_HOME=$(cd "$(dirname "$0")"; pwd)
+
+
+
+# lib home
+APPLIB="$APP_HOME/tools"
+
+# app dependency jars
+APP_CLASSPATH="`find "$APPLIB" -name "*.jar" | sed 's/$/:/g'`"
+
+#echo "$APP_CLASSPATH"
+
+#transfor arry to string
+for k in $APP_CLASSPATH;
+   do TEMP_CLASSPATH=$k"$TEMP_CLASSPATH";
+done
+
+APP_CLASSPATH=$TEMP_CLASSPATH	
+
+JAVA_OPTS=" \
+           -server \
+           -Xms1024m \
+           -Xmx2048m \
+           -Xmn128m \
+           -XX:+DisableExplicitGC \
+           -XX:+UseConcMarkSweepGC \
+           -XX:+UseParNewGC \
+           -XX:PermSize=64m \
+           -XX:MaxPermSize=128m \
+           -XX:MinHeapFreeRatio=40 \
+           -XX:MaxHeapFreeRatio=70 \
+           -XX:CMSInitiatingOccupancyFraction=65 \
+           -Dsun.rmi.dgc.server.gcInterval=0x7FFFFFFFFFFFFFE \
+           -Dsun.rmi.dgc.client.gcInterval=0x7FFFFFFFFFFFFFE"
+
+JAVA_OPTS="-Djava.security.egd=file:///dev/urandom $JAVA_OPTS"
+
+
+# check IP aviable: 0 or 1
+CheckIPAddr() 
+{ 
+    echo $1|grep "^[0-9]\{1,3\}\.\([0-9]\{1,3\}\.\)\{2\}[0-9]\{1,3\}:[0-9]\{1,6\}$" > /dev/null; 
+    #IP must be all num
+        if [ $? -ne 0 ] 
+        then
+                return 1 
+        fi
+        ipaddr=$1 
+        a=`echo $ipaddr|awk -F . '{print $1}'`  #spilt by '.', get the column 
+        b=`echo $ipaddr|awk -F . '{print $2}'` 
+        c=`echo $ipaddr|awk -F . '{print $3}'` 
+        d=`echo $ipaddr|awk -F . '{print $4}'` 
+        
+        e=`echo $d|awk -F : '{print $1}'`
+        f=`echo $d|awk -F : '{print $2}'`
+        for num in $a $b $c $e 
+        do
+                if [ $num -gt 255 ] || [ $num -lt 0 ]    #0 < num <255
+                then
+                        return 1 
+                fi
+        done
+                return 0 
+} 
+
+#check comp name; right 0, wrong 1
+CheckCompName()
+{
+    #compNameList="sns upm content product charging publicinfo campaign plmf order subscribe all "
+    compNameList=`cat $APP_HOME/compinfo.cfg | grep "\["  | awk -F '[' '{print $2}' | awk -F ']' '{print $1}'` 
+    compNameList="all "$compNameList
+    for line in $compNameList
+        do
+            if [ "$line" = "$1" ]; then
+                return 0 
+            fi  
+        done
+    
+    return 1
+}
+
+# get ipinfo from compinfo.cfg
+GetCompIP()
+{
+    tempFileName=tmp_file_`date +%s`.bak
+            
+    #read compinfo.cfg
+    awk -F# '{print $1}' "$APP_HOME/compinfo.cfg" |     
+    sed '/^[    ]*$/d' |                    
+    sed -n "/^[     ]*\[[   ]*$1[  ]*\]/,/^[       ]*\[.*\]/p" | 
+    sed '/^[        ]*\[.*\]/d' > $tempFileName    
+
+    ip_info=$(cat $tempFileName | grep admintooladrr | awk -F= '{print $2}')
+    
+    rm $tempFileName
+
+    echo $ip_info 
+}
+
+#send to java main
+Send2Main()
+{
+    "$JAVA" $JAVA_OPTS -classpath "$APP_CLASSPATH" com.huawei.jaguar.commons.status.client.SendCheckAppStatusMessage "-m" $1 "-s" $2
+}
+
+#iterate the input parameter  
+if [ -z "$*" ];then status -m all;exit 0;fi
+sum=1
+for line in $*
+    do
+        let "sum=$sum + 1"
+        
+        if [ "$line" = "-s" ]; then
+            addr=${!sum}
+        fi  
+        
+        if [ "$line" = "-m" ]; then
+            compName=${!sum} 
+        fi      
+    done
+    
+    
+# ip is not null
+if [ -n "$addr" ]; then  
+   
+   # check IP aviable: 0 or 1
+   CheckIPAddr $addr
+   
+   # ip is 
+   if [ 0 -eq $? ]; then
+        Send2Main "RemoteServer" $addr
+   else 
+        echo "Invalid ip or port!"
+        Send2Main $*
+   fi  
+ # ip null then check compname
+ else
+    if [ -n "$compName" ]; then 
+    
+        #check comp name; right 0, wrong 1
+        CheckCompName $compName		  
+        
+        if [ 0 -eq $? ]; then	
+        
+            if [ "all" = $compName ]; then 
+                compNameList=`cat $APP_HOME/compinfo.cfg | grep "\["  | awk -F '[' '{print $2}' | awk -F ']' '{print $1}'`
+                
+                for line in $compNameList
+                    do
+                        # get ipinfo from compinfo.cfg
+                        ip=$(GetCompIP $line)
+
+                        if [ -n "$ip" ]; then						
+                            Send2Main $line $ip
+                        fi
+                    done	
+            else 
+            
+                # get ipinfo from compinfo.cfg
+                ip=$(GetCompIP $compName)
+                
+                if [ -n "$ip" ]; then
+                    Send2Main $compName $ip
+                else 
+                    echo "not find $compName ip:port info!"
+                    show_help
+                    exit 1
+                fi
+            fi   
+            
+        else 
+            echo "Invalid module name!"
+            show_help
+            exit 1
+        fi
+        
+    else
+        echo "please input the comp name or ip:port!"
+        show_help
+        exit 1
+    fi 
+fi
+

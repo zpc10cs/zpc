@@ -1,0 +1,2138 @@
+#!/usr/bin/ksh
+
+################################################################################
+# Name       : configfileutil.lib
+# Description: common function about kernel config file
+# Date       : 2008-12-08
+# Function   :
+#              _split                   split input string by specify symbol.
+#              split_by_comma           split string by comma.
+#              get_ne_rela_config  
+#              get_component_by_ne      get component list of a ne.
+#              get_component_by_subComp_prefix      
+#                                       get component name of one sub component.
+#              get_subComp_by_component get sub component list of a component.
+#              get_user_by_component    get config item prefix of a component user.
+#              get_user_home_by_component    get config item prefix of a component user.
+#              get_package_by_component get package list of a component.
+#              get_package_by_subComp   get package list of a sub component.
+#              get_svg_component_list   get component list that need install in svg.
+#              get_component_by_user    
+#              get_subComp_by_user
+#              get_subcomp_prefix       get prefix of sub component.
+#              get_comp_array
+#              get_user_array
+#              get_ne_by_comp_id        get ne name list by component id.
+#              get_ne_info_by_comp_id   get ne info by component id.
+#              is_comp_need_install     adjust whether a component need to install.
+#              is_subcomp_need_install  adjust whether a sub component need to install.
+#              is_comp_install_in_svg   adjust whether a component need install in svg.
+#              get_rg_for_ne            get resource group names for ne.
+#              get_rg_relations_for_ne  get link relations of resource groups for ne.
+#              get_mountpoint_for_component
+#                                       get mountpoint list for a component.
+#              is_need_set_float_ip_flag in prepare start, whether need config float ip
+#			   get_portlist_by_component get the port list of component
+#              get_restart_rg_for_ne     get need restart resource group string for faultspy rg.
+################################################################################
+
+################################################################################
+#global variable:comp_arr[]
+#describe	:the elements of the component array was installed in current machine
+#			comp_arr[0] the first element of the array is number of the array
+#			comp_arr[N] the component name of the array
+################################################################################
+comp_arr[0]=""
+
+################################################################################
+#global variable:user_arr[]
+#describe	:the elements of the user array was created in current machine
+#			comp_arr[0] the first element is the number of the array
+#			comp_arr[N] the user name of the array
+################################################################################
+user_arr[0]=""
+
+################################################################################
+#global variable:ne_rela_config
+#describe	:ne relative config file
+################################################################################
+ne_rela_config=""
+
+################################################################################
+# name    : _split
+# describe: split string by specify symbol
+# parameter list:
+#         $1 string information
+#		  $2 split symbol
+# output  : RETNUM    --the number of the segment
+#           RETURN[N] --segment information,the index of array begin with 0 ~ $RETUNM-1
+# rerurn  : 0 succ, 1 failure
+# invoker : any function
+################################################################################
+function _split
+{
+	#initial environment variable
+	RETNUM=0
+	
+	if [ $# -ne 2 ]
+	then
+		install_log "DEBUG" "LIB" "function _split:: the input parameter number is incorrect !"
+		return 1
+	fi
+	
+	typeset str="$1"
+	typeset split_symbol="$2"
+	
+	#define local variable
+	typeset -i split_number=0
+	
+	if [ "x${str}" = "x" -o "x${split_symbol}" = "x" ]
+	then
+		return 0
+	fi
+	
+	#check str whether contain split_symbol
+	typeset temp_str=`echo "${str}" | ${GREP} ${split_symbol}`
+	
+	if [ "x${temp_str}" = "x" ]
+	then
+		RETNUM=1
+		RETURN[0]="${str}"
+		return 0
+	fi
+	
+	#replace specify split_symbol to space
+	temp_str=`echo "${str}" | ${SED} -n "s#${split_symbol}# #gp"`	
+		
+	if [ "x${temp_str}" = "x" ]
+	then
+		return 0
+	fi
+	
+	for segment_info in ${temp_str}
+	do
+		RETURN[${split_number}]="${segment_info}"
+		((split_number=split_number+1))
+	done
+	
+	RETNUM="${split_number}"
+	return 0
+}
+
+################################################################################
+# name    : split_by_comma
+# describe: split string by comma
+# parameter list: $1 string information
+# output  : RETURN[0] --the number of the segment
+#           RETURN[N] --segment information
+# rerurn  : 0 succ, 1 failure
+# invoker : any function
+################################################################################
+function split_by_comma
+{
+	if [ $# -ne 1 ]
+	then
+		install_log "DEBUG" "LIB" "function split_by_comma:: the input parameter number is incorrect !"
+		return 1
+	fi
+	
+	typeset split_symbol=","
+	
+	_split "$1" "${split_symbol}"
+	
+	if [ $? -ne 0 ]
+	then
+		install_log "DEBUG" "LIB" "function split_by_comma:: invoke function _split error !"
+		return 1
+	fi
+	
+	return 0
+}
+
+################################################################################
+# name    : get_ne_rela_config
+# describe: get ne relative config file,the file name is named ${_selectedNetType}.ini
+#	    the _selectedNetType value is from config.properties
+# parameter list: null
+# output  : 
+#           RETURN[0] --the name of the ne rela config
+# rerurn  : 0 succ, 1 failure
+# invoker : main
+###############################################################################
+function get_ne_rela_config
+{
+	typeset log_prefix="function get_ne_rela_config::"
+	
+	get_selected_net_type
+	
+	if [ $? -ne 0 ]
+	then
+		install_log "DEBUG" "LIB" "${log_prefix} invoke getSelectNetType error !"
+		return 1
+	fi
+	
+	if [ "x${RETURN[0]}" = "x" ]
+	then
+		install_log "DEBUG" "LIB" "${log_prefix} the value of ${key} is null string !"
+		return 1
+	fi
+	
+	#initial the global variable
+	ne_rela_config="${IDEPLOY_PKG_PATH}/script/${RETURN[0]}.ini"
+	
+	return 0
+}
+
+################################################################################
+# name    : get_component_by_ne
+# describe: get components by ne,the value is from [NE-COMPONENT-REF] segment
+#	    of ne-comp-sub_comp.ini
+# parameter list: null
+# input	  : $1 ne_name
+# output  : RETNUM	  --the number of the element
+#           RETURN[N] --element name of array
+# rerurn  : 0 succ, 1 failure
+# invoker : public
+################################################################################
+function get_component_by_ne
+{
+	typeset log_prefix="function get_component_by_ne::"
+	typeset segment_name="NE-COMPONENT-REF"
+
+	_get_ne_rela_config "${segment_name}" "$1"
+	
+	if [ $? -ne 0 ]
+	then
+		install_log "DEBUG" "LIB" "${log_prefix} invoke _get_ne_rela_config ${segment_name} $1 error !"
+		return 1
+	fi
+	
+	return 0
+}
+
+################################################################################
+# name    : get_subComp_by_component
+# describe: get subcomponents by component,the value is from [COMPONENT-REF] segment
+#	    of ne-comp-sub_comp.ini
+# parameter list: null
+# input	  : $1 component name
+# output  : RETNUM	  --the number of the element
+#           RETURN[N] --element name of array
+# rerurn  : 0 succ, 1 failure
+# invoker : public
+################################################################################
+function get_subComp_by_component
+{
+	typeset log_prefix="function get_subComp_by_component::"
+	typeset segment_name="COMPONENT-REF"
+
+	_get_ne_rela_config "${segment_name}" "$1"
+	
+	if [ $? -ne 0 ]
+	then
+		install_log "DEBUG" "LIB" "${log_prefix} invoke _get_ne_rela_config ${segment_name} $1 error !"
+		return 1
+	fi
+	
+	return 0
+}
+
+################################################################################
+# name    : get_user_home_by_component
+# describe: get user home by component,the value is from [COMPONENT-USER-HOME] segment
+#	    of ne-comp-sub_comp.ini
+# parameter list: null
+# input	  : $1 component name
+# output  : RETNUM    --the number of the element
+#           RETURN[N] --element name of array
+# rerurn  : 0 succ, 1 failure
+# invoker : public
+################################################################################
+function get_user_home_by_component
+{
+	RETNUM=0
+	RETURN[0]=""
+	typeset log_prefix="function get_user_home_by_component::"
+	typeset segment_name="COMPONENT-USER-HOME"
+	
+	if [ $# -ne 1 ]; then
+		install_log DEBUG LIB "Parameters count of function: get_user_home_by_component failed."
+		return 1
+	fi
+	typeset comp_id="$1"
+	
+	# adjust whether config item in COMPONENT-USER-REF exist
+	cfg_is_exist_sec_key "${ne_rela_config}" "${segment_name}" "${comp_id}"
+	typeset exist_flag="$?"
+	if [ ${exist_flag} -ne 0 -a ${exist_flag} -ne ${ERR_CFG_FILE_KEY_NOT_EXIST} ]; then
+		install_log DEBUG LIB "Adjust existence of config item failed."
+		return 1
+	fi
+	
+	if [ ${exist_flag} -eq ${ERR_CFG_FILE_KEY_NOT_EXIST} ]; then
+		RETNUM=0
+		RETURN[0]=""
+		
+		return 0
+	fi
+	
+	_get_ne_rela_config "${segment_name}" "${comp_id}"
+	
+	if [ $? -ne 0 ]
+	then
+		install_log "DEBUG" "LIB" "${log_prefix} invoke _get_ne_rela_config ${segment_name} $1 error !"
+		return 1
+	fi
+
+	typeset user_home_name=`echo "${RETURN[0]}" | ${AWK} -F\| '{print $1}'`
+	typeset user_home_prex=`echo "${RETURN[0]}" | ${AWK} -F\| '{print $2}'`
+	read_value "${user_home_name}_user_home"
+	if [ $? -ne 0 ]; then
+		install_log "DEBUG" "LIB" "${log_prefix} invoke _get_ne_rela_config ${segment_name} $1 error !"
+		return 1
+	fi
+	typeset user_home_tmp="${RETURN[0]}"
+	
+	if [ "x${user_home_prex}" = "x" ]; then
+		RETURN[0]="${user_home_tmp}"
+	else
+		RETURN[0]="${user_home_tmp}/${user_home_prex}"
+	fi
+
+	return 0
+}
+
+################################################################################
+# name    : get_user_by_component
+# describe: get user array by component,the value is from [COMPONENT-USER-REF] segment
+#	    of ne-comp-sub_comp.ini
+# parameter list: null
+# input	  : $1 component name
+# output  : RETNUM    --the number of the element
+#           RETURN[N] --element name of array
+# rerurn  : 0 succ, 1 failure
+# invoker : public
+################################################################################
+function get_user_by_component
+{
+	RETNUM=0
+	RETURN[0]=""
+	typeset log_prefix="function get_user_by_component::"
+	typeset segment_name="COMPONENT-USER-REF"
+	
+	if [ $# -ne 1 ]; then
+		install_log DEBUG LIB "Parameters count of function: get_user_by_component failed."
+		return 1
+	fi
+	typeset comp_id="$1"
+	
+	# adjust whether config item in COMPONENT-USER-REF exist
+	cfg_is_exist_sec_key "${ne_rela_config}" "${segment_name}" "${comp_id}"
+	typeset exist_flag="$?"
+	if [ ${exist_flag} -ne 0 -a ${exist_flag} -ne ${ERR_CFG_FILE_KEY_NOT_EXIST} ]; then
+		install_log DEBUG LIB "Adjust existence of config item failed."
+		return 1
+	fi
+	
+	if [ ${exist_flag} -eq ${ERR_CFG_FILE_KEY_NOT_EXIST} ]; then
+		RETNUM=0
+		RETURN[0]=""
+		
+		return 0
+	fi
+	
+	_get_ne_rela_config "${segment_name}" "${comp_id}"
+	
+	if [ $? -ne 0 ]
+	then
+		install_log "DEBUG" "LIB" "${log_prefix} invoke _get_ne_rela_config ${segment_name} $1 error !"
+		return 1
+	fi
+	
+	#magbe the user string form user[pag1|pag2],so need to cut the rest of []
+	typeset -i count=0
+	while [ ${count} -lt ${RETNUM} ]
+	do
+		RETURN[${count}]=`echo "${RETURN[${count}]}" | ${AWK} -F[ '{print $1}'`
+		((count=count+1))
+	done
+	
+	return 0
+}
+
+################################################################################
+# name    : get_package_by_component
+# describe: get package array by component,the value is from [COMPONENT-PKG-REF] segment
+#	    of ne-comp-sub_comp.ini
+# parameter list: null
+# input	  : $1 component name
+# output  : RETNUM	  --the number of the element
+#           RETURN[N] --element name of array
+# rerurn  : 0 succ, 1 failure
+# invoker : public
+################################################################################
+function get_package_by_component
+{
+	typeset log_prefix="function get_package_by_component::"
+	typeset -i subComp_count=0
+	typeset -i subComp_index=0
+	typeset -i pkg_count=0
+	typeset -i pkg_index=0
+	typeset -i pkg_tmp_count=0
+	typeset -i pkg_tmp_index=0
+	
+	if [ $# -ne 1 ]
+	then
+		install_log "DEBUG" "LIB" "${log_prefix} the input parameter number is incorrect !"
+		return 1
+	fi
+	
+	if [ "x$1" = "x" ]
+	then
+		install_log "DEBUG" "LIB" "${log_prefix} the component name is null string !"
+		return 1
+	fi
+	
+	#get the subcomponent array of component
+	get_subComp_by_component "$1"
+	
+	if [ $? -ne 0 ]
+	then
+		install_log "DEBUG" "LIB" "${log_prefix} invoke get_subComp_by_component $1 error !"
+		return 1
+	fi
+	
+	#create subcomponent array
+	subComp_count=${RETNUM}
+	while [ ${subComp_index} -lt ${subComp_count} ]
+	do
+		typeset subComp_arr[${subComp_index}]="${RETURN[${subComp_index}]}"
+		((subComp_index=subComp_index+1))
+	done
+	
+	#reset subComp_index
+	subComp_index=0
+	
+	#cycle get the pkg of subcomponent
+	while [ ${subComp_index} -lt ${subComp_count} ]
+	do
+		get_package_by_subComp "${subComp_arr[${subComp_index}]}"
+		
+		if [ $? -ne 0 ]
+		then
+			install_log "DEBUG" "LIB" "${log_prefix} invoke get_package_by_subComp ${subComp_arr[${subComp_index}]} error !"
+			return 1
+		fi
+		
+		pkg_tmp_count="${RETNUM}"
+		#reset pkg_index = 0
+		pkg_tmp_index=0
+		
+		#cycle create pkg array
+		while [ ${pkg_tmp_index} -lt ${pkg_tmp_count} ]
+		do
+			#check the pkg element whether already in pkg array
+			pkg_index=0
+			
+			while [ ${pkg_index} -le ${pkg_count} ]
+			do
+				if [ "x${pkg_arr[${pkg_index}]}" = "x${RETURN[${pkg_tmp_index}]}" ]
+				then
+					break
+				fi
+				
+				if [ ${pkg_index} -eq ${pkg_count} ]
+				then
+					typeset pkg_arr[${pkg_index}]="${RETURN[${pkg_tmp_index}]}"
+					((pkg_count=pkg_count+1))
+					break
+				fi
+				((pkg_index=pkg_index+1))
+			done
+			
+			((pkg_tmp_index=pkg_tmp_index+1))
+		done
+		
+		((subComp_index=subComp_index+1))
+	done
+	
+	#reset pkg_index
+	pkg_index=0
+	
+	while [ ${pkg_index} -lt ${pkg_count} ]
+	do
+		RETURN[pkg_index]="${pkg_arr[${pkg_index}]}"
+		((pkg_index=pkg_index+1))
+	done
+	
+	RETNUM="${pkg_count}"
+	return 0
+}
+
+################################################################################
+# name    : get_package_by_subComp
+# describe: get package array by subComp,the value is from [COMPONENT-PKG-REF] segment
+#	    of ne-comp-sub_comp.ini
+# parameter list: null
+# input	  : $1 subcomponent name
+# output  : RETNUM	  --the number of the element
+#           RETURN[N] --element name of array
+# rerurn  : 0 succ, failure
+# invoker : main
+################################################################################
+function get_package_by_subComp
+{
+	typeset log_prefix="function get_package_by_subComp::"
+	typeset segment_name="COMPONENT-PKG-REF"
+
+	_get_ne_rela_config "${segment_name}" "$1"
+	
+	if [ $? -ne 0 ]
+	then
+		install_log "DEBUG" "LIB" "${log_prefix} invoke _get_ne_rela_config ${segment_name} $1 error !"
+		return 1
+	fi
+	
+	return 0
+}
+
+################################################################################
+# name    : get_svg_component_list
+# describe: get the component list that the component install in svg
+# parameter list: null
+# input	  : null
+# output  : RETNUM	  --the number of the element
+#           RETURN[N] --element name of array
+# rerurn  : 0 succ, 1 failure
+# invoker : public
+################################################################################
+function get_svg_component_list
+{
+	typeset log_prefix="function get_svg_component_list::"
+	typeset segment_name="COMPONENT-NEED-SVG"
+
+	_get_ne_rela_config "${segment_name}" "component_list"
+	
+	if [ $? -ne 0 ]
+	then
+		install_log "DEBUG" "LIB" "${log_prefix} invoke _get_ne_rela_config ${segment_name} component_list error !"
+		return 1
+	fi
+	
+	return 0
+}
+
+################################################################################
+# name    : _get_ne_rela_config
+# describe: get config infomation from  ${ne_rela_config}
+# parameter list: null
+# input	  : $1 segment_name
+#	    $2 key
+# output  : RETNUM	  --the number of specify element
+#           RETURN[N] --the value of specify element
+# rerurn  : 0 succ, 1 failure
+# invoker : main
+################################################################################
+function _get_ne_rela_config
+{
+	typeset log_prefix="function _get_ne_rela_config::"
+	
+	#check input parameter number
+	if [ $# -ne 2 ]
+	then
+		install_log "DEBUG" "LIB" "${log_prefix} the input parameter number is incorrect !"
+		return 1
+	fi
+	
+	typeset segment_name="$1"
+	typeset key="$2"
+	
+	if [ "x${segment_name}" = "x" -o "x${key}" = "x" ]
+	then
+		install_log "DEBUG" "LIB" "${log_prefix} the input parameter have null string! \$1=${segment_name}, \$2=${key}"
+		return 1
+	fi
+	
+	#get component list
+	#cfg_get_sec_key_value "${ne_rela_config}" "${segment_name}" "${key}"
+	cfg_get_sec_key_value2 "${ne_rela_config}" "${segment_name}" "${key}"
+	
+	if [ $? -ne 0 ]
+	then
+		install_log "DEBUG" "LIB" "${log_prefix} invoke cfg_get_sec_key_value2 ${ne_rela_config} ${segment_name} ${key} error !"
+		return 1
+	fi
+	
+	typeset component_list="${RETURN[0]}"
+	
+	if [ "x${component_list}" = "x" ]
+	then
+		install_log "DEBUG" "LIB" "${log_prefix} the value of ${key} is null string !"
+		return 1
+	fi
+	
+	#split component list to array
+	split_by_comma "${component_list}"
+	
+	if [ $? -ne 0 ]
+	then
+		install_log "DEBUG" "LIB" "${log_prefix} invoke split_by_comma ${component_list} error !"
+		return 1
+	fi
+	
+	return 0
+}
+
+################################################################################
+# name	:	get_component_by_user
+# describe:	get the component array from the "COMPONENT-USER-REF" section of
+#		the ${ne_rela_config} file by user name
+#
+#		the ${ne_rela_config} file was formed
+#	    	comp1=user1
+#	    	comp2=user2
+#	    	comp3=user1
+#	    	comp4=user3[sub1|sub2],user2[sub3]
+# parameter list: null
+# input	  : null
+# output  : RETNUM	--the number of the component
+#           RETURN[N]	--the name of the component,
+#			--the name was formed "comp[sub1|sub2]+num"
+# rerurn  : 0 succ, 1 failure
+# invoker : public
+################################################################################
+function get_component_by_user
+{
+	#init variable
+	typeset log_prefiex="function get_component_by_user::"
+	typeset segment_name="COMPONENT-USER-REF"
+	
+	if [ $# -ne 1 ]
+	then
+		install_log "DEBUG" "LIB" "${log_prefix} the input parameter number is incorrect !"
+		return 1
+	fi
+	
+	typeset user="$1"
+	
+	if [ "x${user}" = "x" ]
+	then
+		RETNUM=0
+		return 0
+	fi
+	
+	#get the content of "COMPONENT-USER-REF" section
+	cfg_get_sec_value "${ne_rela_config}" "${segment_name}"
+	
+	if [ $? -ne 0 ]
+	then
+		install_log "DEBUG" "LIB" "${log_prefix} invoke cfg_get_sec_value ${ne_rela_config} ${segment_name} error !"
+		return 1
+	fi
+	
+	#this variable was described the total number of the component
+	typeset -i comp_array_num=0
+	
+	typeset -i outer_cycle_num=0
+	
+	#outer cycle get the component info of specify user
+	while [ ${outer_cycle_num} -lt ${RETNUM} ]
+	do
+		#the tmp_comp form is comp[sub1|sub2]
+		tmp_comp=`echo "${RETURN[${outer_cycle_num}]}" | ${AWK} -F= -vtmp_user="${user}" '
+			{
+				#current string contains user info
+				if($2~tmp_user)
+				{
+					#split the $2 string by comma symbol
+					field_num = split($2,user_filed,",")
+					
+					append_str = ""
+					
+					#the $2 string only one user info
+					if(field_num==0)
+					{
+						#check the user string whether contain "[]"
+						if($2~/\[.*\]$/)
+						{
+							#only get the [] content of the string
+							#for example,user[sub1|sub2] => [sub1|sub2]
+							gsub(tmp_user,"",$2)
+							
+							append_str = $2
+						}
+					}
+					else
+					{
+						#get the field where contain the user string
+						for(i=1; i<field_num; i++)
+						{
+							if(user_filed[i]~tmp_user)
+							{
+								#check the user string whether contain "[]"
+								if(user_filed[i]~/\[.*\]$/)
+								{
+									#only get the [] content of the string
+									#for example,user[sub1|sub2] => [sub1|sub2]
+									gsub(tmp_user,"",user_filed[i])
+									
+									append_str = user_filed[i]
+								}
+								
+								#out the awk cycle
+								break
+							}
+						}
+					}
+					
+					print $1 append_str
+				}
+			}'`
+			
+		if [ "x${tmp_comp}" != "x" ]
+		then
+			#define inner cycle variable
+			typeset -i inner_cycle_num=0
+			
+			#the purpose of the inner cycle is to find the repeat component and add the component_repeat_time
+			while [ ${inner_cycle_num} -le ${comp_array_num} ]
+			do
+				#the component is found in the comp_array
+				if [ "x${tmp_comp}" = "x${component_arr[${inner_cycle_num}]}" ]
+				then
+					#increace the time of the component that was existed in the comp_array
+					comp_repeat_time_arr[${inner_cycle_num}]=`expr ${comp_repeat_time_arr[${inner_cycle_num}]} + 1`
+					
+					#out the inner cycle
+					break
+				fi
+				
+				#in the last cycle, if the tmp_comp isn't found in the component array, 
+				#then define a new component array element in the end of the array
+				if [ ${inner_cycle_num} -eq ${comp_array_num} ]
+				then
+					typeset component_arr[${comp_array_num}]="${tmp_comp}"
+					typeset comp_repeat_time_arr[${comp_array_num}]=1
+					
+					#increace the array number
+					((comp_array_num=comp_array_num+1))
+					
+					#out the inner cycle
+					break
+				fi
+				
+				#inner cycle index add+1
+				((inner_cycle_num=inner_cycle_num+1))
+			done
+			
+			#the purpose of reseting the inner cycle index to 0 is make sure next outer cycle 
+			inner_cycle_num=0
+		fi
+		
+		#couter cycle index add+1
+		((outer_cycle_num=outer_cycle_num+1))
+	done
+	
+	#combine the comp_arr and comp_repeat_time_arr
+	typeset -i i=0
+	while [ ${i} -lt ${comp_array_num} ]
+	do
+		RETURN[${i}]=${component_arr[${i}]}"+"${comp_repeat_time_arr[${i}]}
+		((i=i+1))
+	done
+	
+	RETNUM=${comp_array_num}
+	return 0
+}
+
+################################################################################
+# name	:	get_subComp_by_user
+# describe:	get the subcomponent array by the user
+# parameter list: null
+# input	  : null
+# output  : RETNUM	--the number of the subcomponent
+#           RETURN[N]	--the name was formed "subcomp+num",
+#			--first part is subComp name,
+#			--last part is the time of subComp that need to install
+# rerurn  : 0 succ, 1 failure
+# invoker : public
+################################################################################
+function get_subComp_by_user
+{
+	typeset log_prefix="function get_subComp_by_user::"
+	
+	if [ $# -ne 1 ]
+	then
+		install_log "DEBUG" "LIB" "${log_prefix} the input parameter number is incorrect !"
+		return 1
+	fi
+	
+	typeset user=$1
+	
+	if [ "x${user}" = "x" ]
+	then
+		RETNUM=0
+		return 0
+	fi
+	
+	#get all subComponent names of the config file
+	typeset segment_name="COMPONENT-PKG-REF"
+	cfg_get_sec_key_names "${ne_rela_config}" "${segment_name}"
+	
+	if [ $? -ne 0 ]
+	then
+		install_log "DEBUG" "LIB" "${log_prefix} invoke cfg_get_sec_key_names ${ne_rela_config} ${segment_name} error !"
+		exit 1
+	fi
+	
+	#create subComponent array,initial the number of subComponent is 0
+	#the number of all subComponent array
+	typeset -i subComp_num="${RETNUM}"
+	typeset -i sub_index=0
+	while [ ${sub_index} -lt ${subComp_num} ]
+	do
+		typeset subComp_arr[${sub_index}]="${RETURN[${sub_index}]}"
+		typeset -i subComp_repeat_time_arr[${sub_index}]=0
+		
+		((sub_index=sub_index+1))
+	done
+
+	#get the component info by specify user,the component string is comp[sub1|sub2]_num
+	get_component_by_user "${user}"
+	
+	if [ $? -ne 0 ]
+	then
+		install_log "DEBUG" "LIB" "${log_prefix} invoke get_component_by_user ${user} error !"
+		return 1
+	fi
+	
+	typeset -i cycle_num=0
+	
+	#the number of subComponent under specify user
+	typeset -i subComp_of_user_num="${RETNUM}"
+	
+	
+	#cycle initial the component string of the user to the temp_comp_str
+	while [ ${cycle_num} -lt ${RETNUM} ]
+	do
+		typeset tmp_comp_str[${cycle_num}]="${RETURN[${cycle_num}]}"
+		#count index + 1
+		((cycle_num=cycle_num+1))
+	done
+	
+	#init cycle variable
+	typeset outer_cycle_num=0
+	
+	#cycle parse the component string,the component string is comp[sub1|sub2]_num
+	while [ ${outer_cycle_num} -lt ${subComp_of_user_num} ]
+	do
+		if [ "x${tmp_comp_str[${outer_cycle_num}]}" != "x" ]
+		then
+			#split tmp_comp_str to component name and repeat time
+			typeset comp_name=`echo "${tmp_comp_str[${outer_cycle_num}]}" | cut -d+ -f1`
+			typeset comp_time=`echo "${tmp_comp_str[${outer_cycle_num}]}" | cut -d+ -f2`
+			
+			#check the comp_name whether contain "[]" part
+			typeset is_only_comp_info=`echo "${comp_name}" | ${GREP} "\[.*\]$"`
+			
+			#the the subComponent collection to the temp_subComp_arr
+			
+			#the number of the temp subComponent array
+			typeset -i tmp_subComp_num=0
+			
+			#temp variable
+			typeset -i j=0
+			#not all of the subComponents belong to specify user
+			if [ "x${is_only_comp_info}" != "x" ]
+			then
+				#only get the content of the "[]" part for the subComp
+				typeset subComp_info=`echo "${comp_name}" | ${AWK} -F\[ '{print $2}' | ${AWK} -F\] '{print $1}'`
+				
+				typeset field_num=`echo "${subComp_info}" | ${AWK} -F\| '{print NF}'`
+				
+				j=1
+				#cycle get the subComponent name of the sub1|sub2|...
+				while [ ${j} -le ${field_num} ]
+				do
+					#get the subComp
+					typeset tmp_subComp=`echo "${subComp_info}" | ${AWK} -F\| -vfield_num=${j} '{print $field_num}'`
+					
+					#check the subComp is not null
+					if [ "x${tmp_subComp}" != "x" ]
+					then
+						typeset temp_subComp_arr[${tmp_subComp_num}]="${tmp_subComp}"
+						#the number of the temp subComponent array add +1
+						((tmp_subComp_num=tmp_subComp_num+1))
+					fi
+					
+					#index add 1,get the next field value
+					((j=j+1))
+				done
+			#all subComponents of the component belong to specify user
+			else
+				#get all the subComponent of the component
+				get_subComp_by_component "${comp_name}"
+				
+				if [ $? -ne 0 ]
+				then
+					install_log "DEBUG" "LIB" "${log_prefix} get get_subComp_by_component ${comp_name} error !"
+					exit 1
+				fi
+				
+				while [ ${j} -lt ${RETNUM} ]
+				do
+					typeset temp_subComp_arr[${tmp_subComp_num}]="${RETURN[${j}]}"
+					#the number of the temp subComponent array add +1
+					((tmp_subComp_num=tmp_subComp_num+1))
+					
+					#index add 1,get the next subComponent value
+					((j=j+1))
+				done
+			
+			fi
+			
+			#count the subComponent's number of the user
+			#reset the temp variable value
+			j=0
+			while [ ${j} -lt ${tmp_subComp_num} ]
+			do
+				#reset the index of the subComp array
+				sub_index=0
+				while [ ${sub_index} -lt ${subComp_num} ]
+				do
+					#check temp subComp element whether in subComponent
+					if [ "x${subComp_arr[${sub_index}]}" = "x${temp_subComp_arr[${j}]}" ]
+					then
+						subComp_repeat_time_arr[${sub_index}]=`expr ${subComp_repeat_time_arr[${sub_index}]} + 1`
+						break
+					fi
+					((sub_index=sub_index+1))
+				done
+				((j=j+1))
+			done
+		fi
+		
+		#count index + 1
+		((outer_cycle_num=outer_cycle_num+1))
+	done
+	
+	#return the subComponent info of the specify user,the form is subComp_num,
+	#first part is the name of the subComponent,last part is the number of the subComponent that the user include
+	#reset the sub_index value
+	sub_index=0
+	
+	typeset -i retNum=0
+	while [ ${sub_index} -lt ${subComp_num} ]
+	do
+		if [ ${subComp_repeat_time_arr[${sub_index}]} -gt 0 ]
+		then
+			RETURN[${retNum}]=${subComp_arr[${sub_index}]}"+"${subComp_repeat_time_arr[${sub_index}]}
+			((retNum=retNum+1))
+		fi
+		
+		((sub_index=sub_index+1))
+	done
+	
+	RETNUM=${retNum}
+	return 0
+}
+
+################################################################################
+# name	:	get_subcomp_prefix
+# describe:	get the subcomponent prefix of the config.properties.
+#			because ideploy's config.xml contain all elements config of all condition,
+#			in some condition the subcomponent maybe configure more than once,
+#			and any element must have unique id,for this reason set a "subcomponent
+#			prefix" concept to mark unique element. 
+#			when you wanted to get a element id,you can write like
+#				get_subcomp_prefix subcomp_name comp_name
+#			the id you wanted is "RETURN[0]"_"real_id",if the subcomponent only have
+#			one config,then the result RETURN[0] is null string ""
+# parameter list: 
+#            $1       sub component name
+#            $2       component name that the subcomponent belongs to
+# output  : RETURN[0]	the subcomponent prefix name
+# rerurn  : 0 succ, 1 failure
+# invoker : public
+################################################################################
+function get_subcomp_prefix
+{
+	RETURN[0]=""
+	typeset log_prefix="function get_subcomp_prefix::"
+	typeset segment_name="SUB-COMPONENT-PREFIX"
+	
+	#check the number of input parameter
+	if [ $# -ne 2 ]
+	then
+		install_log "DEBUG" "LIB" "function _split:: the input parameter number is incorrect !"
+		return 1
+	fi
+	
+	if [ "x$1" = "x" ]
+	then
+		install_log "DEBUG" "LIB" "${log_prefix} the value of subcomponent name is null string !"
+		return 1
+	fi
+	
+	if [ "x$2" = "x" ]
+	then
+		install_log "DEBUG" "LIB" "${log_prefix} the value of component name is null string !"
+		return 1
+	fi
+	
+	typeset subcomp_name="$1"
+	typeset comp_name="$2"
+	typeset -i status=0
+	#check subcomponent whether exist
+	cfg_is_exist_sec_key "${ne_rela_config}" "COMPONENT-PKG-REF" "${subcomp_name}"
+	status="$?"
+	if [ ${status} -ne 0 ]
+	then
+		if [ ${status} -eq 4 ]
+		then
+			install_log "DEBUG" "LIB" "${log_prefix} the ${subcomp_name} not define in COMPONENT-PKG-REF segment !"
+		else
+			install_log "DEBUG" "LIB" "${log_prefix} invoke cfg_is_exist_sec_key ${ne_rela_config} \"COMPONENT-PKG-REF\" ${subcomp_name} error !"
+		fi
+		return 1
+	fi
+	
+	#check component whether exist
+	cfg_is_exist_sec_key "${ne_rela_config}" "COMPONENT-REF" "${comp_name}"
+	status="$?"
+	if [ ${status} -ne 0 ]
+	then
+		if [ ${status} -eq 4 ]
+		then
+			install_log "DEBUG" "LIB" "${log_prefix} the ${comp_name} not define in COMPONENT-REF segment !"
+		else
+			install_log "DEBUG" "LIB" "${log_prefix} invoke cfg_is_exist_sec_key ${ne_rela_config} \"COMPONENT-REF\" ${comp_name} error !"
+		fi
+		return 1
+	fi
+	
+	#check the subcomponent whether have prefix config
+	cfg_is_exist_sec_key "${ne_rela_config}" "${segment_name}" "${subcomp_name}"
+	status="$?"
+	if [ ${status} -ne 0 -a ${status} -ne 4 ]
+	then
+		install_log "DEBUG" "LIB" "${log_prefix} invoke cfg_is_exist_sec_key ${ne_rela_config} ${segment_name} ${subcomp_name} error !"
+		return 1
+	fi
+	
+	#the subcomponent don't have prefix config
+	if [ ${status} -eq 4 ]
+	then
+		RETURN[0]=""
+		return 0
+	#the subcomponent have prefix identity
+	elif [ ${status} -eq 0 ]	
+	then
+		#get the subcomponet str
+		cfg_get_sec_key_value "${ne_rela_config}" "${segment_name}" "${subcomp_name}"
+		
+		if [ $? -ne 0 ]
+		then
+			install_log "DEBUG" "LIB" "${log_prefix} invoke cfg_get_sec_key_value ${ne_rela_config} ${segment_name} ${subcomp_name} error !"
+			return 1
+		fi
+		
+		for pfx_pair in `echo "${RETURN[0]}" | sed "s/,/ /g"`
+		do
+			typeset tmp_pfx=`echo "${pfx_pair}" | awk -F"|" -vcpn="${comp_name}" '
+			BEGIN {
+				ptn = "^" cpn "$";
+			}
+			{
+				if ($1 ~ ptn)
+				{
+					print $2;
+					exit 0;
+				}
+			}'`
+			
+			if [ "X${tmp_pfx}" != "X" ]; then
+				RETURN[0]="${tmp_pfx}"
+				return 0
+			fi
+		done
+		
+		install_log "DEBUG" "LIB" "${log_prefix} can't find the prefix of ${subcomp_name} subcomponent ${comp_name} component !"
+		return 1
+	fi
+}
+
+################################################################################
+# name	:	get_comp_array
+# describe:	get component array of the specify scope
+#			NOTE: in MDSP double-mode ideploy task,the task will create some virtual task.
+#			every virtual task that contains some components is a resource collection,
+#			so every virtual task has itself config.properties file.
+#			when master occurred exception the resouce collection will be switched.
+#			scope_name=alls get all the components the net_type contains
+#			scope_name=all	get the component collection of all install user task of current machine
+#			scope_name=single	get the component collection of current virtual task
+# parameter list: $1	scope_name[single|all]
+# input	  : null
+# output  : 
+#          RETNUM  component array size
+#          RETURN[0-n] component array item
+# rerurn  : 0 success 1 failure
+# invoker : public
+################################################################################
+function get_comp_array
+{
+	typeset log_prefix="function get_comp_array::"
+	
+	typeset -i ne_index=0
+	typeset -i ne_count=0
+	typeset -i component_index=0
+	typeset -i component_count=0
+	
+	#check input parameter
+	if [ $# -eq 1 -o $# -eq 0 ]
+	then
+		#keep formerly implement
+		if [ $# -eq 0 ]
+		then
+			typeset scope_name="single"
+		else
+			typeset scope_name="$1"
+			
+			if [ "x${scope_name}" != "xall" -a "x${scope_name}" != "xsingle" -a "x${scope_name}" != "xalls" ]
+			then
+				install_log "DEBUG" "CHECK_ENV" "${log_prefix} the input parameter scope_name must be \"all\" or \"single\" or \"alls\"."
+				return 1
+			fi
+		fi
+	else
+		install_log "DEBUG" "CHECK_ENV" "${log_prefix} the input parameter number is incorrect."
+		return 1
+	fi
+	
+	#get all component collection from ${ne_rela_config} file of [COMPONENT-REF] segment
+	typeset segment_name="COMPONENT-REF"
+	cfg_get_sec_key_names "${ne_rela_config}" "${segment_name}"
+	
+	if [ $? -ne 0 ]
+	then
+		install_log "DEBUG" "LIB" "${log_prefix} invoke cfg_get_sec_key_names ${ne_rela_config} ${segment_name} error !"
+		exit 1
+	fi
+	
+	component_count="${RETNUM}"
+	while [ ${component_index} -lt ${component_count} ]
+	do
+		typeset tmp_comp_arr[${component_index}]="${RETURN[${component_index}]}"
+		typeset -i tmp_comp_repeat_time_arr[${component_index}]=0
+		((component_index=component_index+1))
+	done
+	
+	#get component collection of all install task
+	if [ "x${scope_name}" = "xall" ]
+	then
+		get_localmachine_ne_list
+	#get component collection of current virtual task
+	elif [ "x${scope_name}" = "xalls" ];then
+        get_all_ne_list
+    else
+		get_local_ne_list
+	fi
+	
+	if [ $? -ne 0 ]
+	then
+		install_log "DEBUG" "LIB" "${log_prefix} invoke get_local_ne_list error !"
+		return 1
+	fi
+	
+	ne_count="${RETNUM}"
+	
+	while [ ${ne_index} -lt ${ne_count} ]
+	do
+		typeset tmp_ne[${ne_index}]="${RETURN[${ne_index}]}"
+		((ne_index=ne_index+1))
+	done
+	
+	#get the component collection of the specify ne
+	#reset the ne_index num to 0
+	ne_index=0
+	while [ ${ne_index} -lt ${ne_count} ]
+	do
+		#get the component collection of the specify ne
+		get_component_by_ne "${tmp_ne[${ne_index}]}"
+		
+		if [ $? -ne 0 ]
+		then
+			install_log "DEBUG" "LIB" "${log_prefix} invoke get_component_by_ne ${tmp_ne[${ne_index}]} error !"
+			return 1
+		fi
+		
+		#temp cycle variable
+		typeset -i i=0
+		while [ $i -lt ${RETNUM} ]
+		do
+			component_index=0
+			while [ ${component_index} -lt ${component_count} ]
+			do
+				if [ "x${tmp_comp_arr[${component_index}]}" = "x${RETURN[${i}]}" ]
+				then
+					tmp_comp_repeat_time_arr[${component_index}]=`expr ${tmp_comp_repeat_time_arr[${component_index}]} + 1`
+					break
+				fi
+				((component_index=component_index+1))
+			done
+			((i=i+1))
+		done
+		((ne_index=ne_index+1))
+	done
+	
+	#initial the global comp_arr
+	component_index=0
+	typeset tmp_comp=""
+	typeset -i comp_count=0
+	while [ ${component_index} -lt ${component_count} ]
+	do
+		if [ ${tmp_comp_repeat_time_arr[${component_index}]} -gt 0 ]
+		then
+			tmp_comp="${tmp_comp_arr[${component_index}]}"
+			((comp_count=comp_count+1))
+			comp_arr[${comp_count}]="${tmp_comp}"
+		fi
+		((component_index=component_index+1))
+	done
+	
+	comp_arr[0]="${comp_count}"
+	
+	typeset comp_idx=1
+	RETNUM=0
+	while [ ${RETNUM} -lt ${comp_count} ]
+	do
+		RETURN[${RETNUM}]="${comp_arr[${comp_idx}]}"
+	
+		((comp_idx=comp_idx+1))
+		((RETNUM=RETNUM+1))
+	done
+	
+	return 0
+}
+
+################################################################################
+# name	:	get_user_array
+# describe:	
+#			scope_name=all	get the component collection of all install task of current machine
+#			scope_name=single	get the component collection of current virtual task
+# parameter list: $1	scope_name[single|all]
+# input	  : null
+# output  : 
+#           RETNUM     user array size
+#           RETURN[0-n]  user array item
+# rerurn  : 0 success 1 failure
+# invoker : main
+################################################################################
+function get_user_array
+{
+	typeset log_prefix="function get_user_array::"
+	
+	#anytime the user_arr count number must reset to 0
+	user_arr[0]=0
+	
+	get_local_ne_list
+	if [ $? -ne 0 ]
+	then
+		install_log "ERROR" "CHECK_ENV" "${log_prefix} invoke get_local_ne_list error."
+		#fail time +1
+		((fail_num=fail_num+1))
+	fi
+	typeset ne_count="${RETNUM}"
+	typeset ne_list[0]=""
+	typeset idx=0
+	while [ ${idx} -lt ${ne_count} ]
+	do
+		#get the user collection of the specify component
+		get_user_by_component "${RETURN[${idx}]}"
+		if [ $? -ne 0 ]
+		then
+			install_log "DEBUG" "LIB" "${log_prefix} invoke get_user_by_component ${comp_arr[${comp_index}]} error !"
+			((fail_num=fail_num+1))
+		fi
+		
+		typeset -i i=0
+		typeset -i user_count=0
+		typeset -i user_pos=0
+		while [ ${i} -lt ${RETNUM} ]
+		do
+			while [ ${user_count} -le ${user_arr[0]} ]
+			do
+				#if the user already in the user_arr,then exit the cycle
+				if [ "x${user_arr[${user_count}]}" = "x${RETURN[${i}]}" ]
+				then
+					break
+				fi
+				
+				#if the user not in the user_arr,then add the element to the array
+				if [ ${user_count} -eq ${user_arr[0]} ]
+				then
+					((user_pos=user_count+1))
+					user_arr[${user_pos}]="${RETURN[${i}]}"
+					#the user count add + 1
+					user_arr[0]=`expr ${user_arr[0]} + 1`
+				fi
+				
+				((user_count=user_count+1))
+				
+			done
+			((i=i+1))
+		done
+		((idx=idx+1))
+	done
+	
+	RETNUM=0
+	typeset user_cnt="${user_arr[0]}"
+	typeset user_idx=1
+	while [ ${RETNUM} -lt ${user_cnt} ]
+	do
+		RETURN[${RETNUM}]="${user_arr[${user_idx}]}"
+		((user_idx=user_idx+1))
+		((RETNUM=RETNUM+1))
+	done
+	
+	return 0
+}
+
+################################################################################
+# name	:	get_ne_by_comp_id
+# describe:	get ne name by component id.
+# parameter list:
+#           $1  component id
+#           $2  component prefix
+# input	  : null
+# output  : 
+#           RETNUM     ne name number
+#           RETURN[n]  ne name list 
+# rerurn  : 0 success 1 failure
+# invoker : public
+################################################################################
+function get_ne_by_comp_id
+{
+	RETNUM=0
+	RETURN[0]=""
+	if [ $# -eq 1 ]; then
+		typeset comp_prefix=""
+	elif [ $# -eq 2 ]; then
+		typeset comp_prefix="$2"
+	else
+		install_log DEBUG LIB "Parameters count of function get_ne_by_comp_id is not match."
+		return 1
+	fi
+	typeset comp_id="$1"
+	
+	typeset comp_pkg=""
+	if [ "X${comp_prefix}" = "X" ]; then
+		typeset comp_ref_sec="COMPONENT-REF"
+		cfg_get_sec_key_names "${ne_rela_config}" "${comp_ref_sec}"
+		if [ $? -ne 0 ]; then
+			install_log DEBUG LIB "Getting component package names failed."
+			return 1
+		fi
+		typeset comp_pkg_list=""
+		typeset idx=0
+		while [ ${idx} -lt ${RETNUM} ]
+		do
+			comp_pkg_list[${idx}]="${RETURN[${idx}]}"
+		
+			((idx=idx+1))
+		done
+		
+		for pl in ${comp_pkg_list[@]}
+		do
+			cfg_get_sec_key_value "${ne_rela_config}" "${comp_ref_sec}" "${pl}"
+			typeset comp_list_str="${RETURN[0]}"
+			comp_pkg=`echo "${comp_list_str}" | awk -F, -vcpn="${comp_id}" '
+			BEGIN {
+				ptn = "^" cpn "$";
+			}
+			{
+				for(i=1;i<=NF;i++)
+				{
+					if ($i ~ ptn)
+					{
+						print $i;
+						exit 0;
+					}
+				}
+			}'`
+			
+			if [ "X${comp_pkg}" != "X" ]; then
+				#notice, must return component ID,not awk {print $i} <- it's sub_comp_id
+				comp_pkg=${pl}
+				break
+			fi
+		done
+	else
+		typeset sub_comp_prefix_sec="SUB-COMPONENT-PREFIX"
+		cfg_is_exist_sec_key "${ne_rela_config}" "${sub_comp_prefix_sec}" "${comp_id}"
+		if [ $? -ne 0 ]; then
+			install_log DEBUG LIB "Can't find prefix for component: ${comp_id}."
+			return 1
+		fi
+		
+		cfg_get_sec_key_value "${ne_rela_config}" "${sub_comp_prefix_sec}" "${comp_id}"
+		typeset prefix_list_str="${RETURN[0]}"
+		for pl in `echo "${prefix_list_str}" | sed "s/,/ /g"`
+		do
+			comp_pkg=`echo "${pl}" | awk -F"|" -vpfx="${comp_prefix}" '
+			BEGIN {
+				ptn = "^" pfx "$";
+			}
+			{
+				if ($2 ~ ptn)
+				{
+					print $1;
+					exit 0;
+				}
+			}'`
+			
+			if [ "X${comp_pkg}" != "X" ]; then
+				break
+			fi
+		done
+	fi
+	
+	if [ "X${comp_pkg}" = "X" ]; then
+		install_log DEBUG LIB "Getting component package name failed."
+		return 1
+	fi
+	
+	typeset ne_comp_ref_sec="NE-COMPONENT-REF"
+	cfg_get_sec_key_names "${ne_rela_config}" "${ne_comp_ref_sec}"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting ne list failed."
+		return 1
+	fi
+	typeset ne_list=""
+	typeset idx=0
+	while [ ${idx} -lt ${RETNUM} ]
+	do
+		ne_list[${idx}]="${RETURN[${idx}]}"
+	
+		((idx=idx+1))
+	done
+	
+	typeset rt_ne_list[0]=""
+	typeset rt_num=0
+	for ne_id in ${ne_list[@]}
+	do
+		cfg_get_sec_key_value "${ne_rela_config}" "${ne_comp_ref_sec}" "${ne_id}"
+		typeset comp_pkg_list_str="${RETURN[0]}"
+		typeset tmp_flag=`echo "${comp_pkg_list_str}" | awk -F, -vcpid="${comp_pkg}" '
+		BEGIN {
+			ptn = "^" cpid "$";
+		}
+		{
+			for(i=1;i<=NF;i++)
+			{
+				if($i ~ ptn)
+				{
+					print $i;
+					exit 0;
+				}
+			}
+		}'`
+		
+		if [ "X${tmp_flag}" != "X" ]; then
+			rt_ne_list[${rt_num}]="${ne_id}"
+			((rt_num=rt_num+1))
+		fi
+	done
+	
+	if [ ${rt_num} -ne 1 ]; then
+		install_log DEBUG LIB "Can't get ne name or get more than one ne name."
+		return 1
+	fi
+	
+	RETNUM=1
+	RETURN[0]="${rt_ne_list[0]}"
+	
+	return 0
+}
+
+################################################################################
+# name	:	get_ne_info_by_comp_id
+# describe:	get ne info by component id.
+# parameter list:
+#           $1  component id
+#           $2  component prefix
+# input	  : null
+# output  : 
+#           NE_NODE_NUM		 ne node size
+#           NE_DM_TYPE[n]	 dm type of every node
+#           NE_FLOAT_IP[n]   float ip of every node
+#           NE_HOST_IP[n]    host ip of every node
+#           NE_STANDBY_IP[n] standby ip of every node
+# rerurn  : 0 success 1 failure
+# invoker : public
+################################################################################
+function get_ne_info_by_comp_id
+{
+	if [ $# -eq 0 -o $# -gt 2 ]; then
+		install_log DEBUG LIB "Parameters count of function: get_ne_info_by_comp_id error."
+		return 1
+	fi
+	typeset comp_id="$1"
+	typeset comp_prefix="$2"
+
+	get_ne_by_comp_id "${comp_id}" "${comp_prefix}"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Get ne name from component name and prefix failed."
+		return 1
+	fi
+	typeset ne_name="${RETURN[0]}"
+	
+	get_ne_info "${ne_name}"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Get ne info by component name and prefix failed."
+		return 1
+	fi
+	
+ 	return 0
+}
+
+################################################################################
+# name	:	is_comp_need_install
+# describe:	adjust whether a component need to install.
+# parameter list:
+#           $1  component id
+# input	  : null
+# output  : 
+#           RETURN[0] 0 need not, 1 need
+# rerurn  : 0 success 1 failure
+# invoker : public
+################################################################################
+function is_comp_need_install
+{
+	
+	if [ $# -ne 1 ]; then
+		install_log DEBUG LIB "Parameters count of function: is_comp_need_install error."
+		return 1
+	fi
+	typeset comp_id="$1"
+
+	RETURN[0]=""
+	typeset tmp_rt="1"	
+	if [ `grep "^${comp_id}_is_install=" "${IDEPLOY_CONFIG_DIR}/${IDEPLOY_CONFIG}" | wc -l` -gt 0 ]; then
+		read_value "${comp_id}_is_install" "iDeploy_True"
+		if [ "X${RETURN[0]}" = "XNo" ]; then
+			tmp_rt="0"
+		fi
+	fi
+	
+	
+	RETURN[0]="${tmp_rt}"
+	
+	return 0
+}
+
+################################################################################
+# name	:	is_subcomp_need_install
+# describe:	adjust whether a sub component need to install.
+# parameter list:
+#           $1  sub component id
+#           $2  sub component prefix
+# input	  : null
+# output  : 
+#           RETURN[0] 0 need not, 1 need
+# rerurn  : 0 success 1 failure
+# invoker : public
+################################################################################
+function is_subcomp_need_install
+{
+	RETURN[0]=""
+	if [ $# -ne 1 -a $# -ne 2 ]; then
+		install_log DEBUG LIB "Parameters count of function: is_subcomp_need_install error."
+		return 1
+	fi
+	typeset sub_comp_id="$1"
+	typeset sub_comp_prefix="$2"
+	
+	typeset cfg_key_pfx=""
+	if [ "X${sub_comp_prefix}" = "X" ]; then
+		cfg_key_pfx="${sub_comp_id}"
+	else
+		cfg_key_pfx="${sub_comp_prefix}_${sub_comp_id}"
+	fi
+
+	typeset tmp_rt="1"
+	if [ `grep "^${cfg_key_pfx}_is_install=" "${IDEPLOY_CONFIG_DIR}/${IDEPLOY_CONFIG}" | wc -l` -gt 0 ]; then
+		read_value "${cfg_key_pfx}_is_install" "iDeploy_True"
+		if [ "X${RETURN[0]}" = "XNo" ]; then
+			tmp_rt="0"
+		fi
+	fi
+	
+	RETURN[0]="${tmp_rt}"
+	
+	return 0
+}
+
+################################################################################
+# name	:	cfg_get_sec_key_value2
+# describe:	get key value from ini file.
+# parameter list:
+#           $1  file name
+#           $2  section name
+#           $3  key name
+# input	  : null
+# output  : 
+#           RETURN[0] key value
+# rerurn  : 0 success 1 failure
+# invoker : public
+################################################################################
+function cfg_get_sec_key_value2
+{
+	RETURN[0]=""
+	
+	if [ $# -ne 3 ]; then
+		install_log DEBUG LIB "Parameters count of function: cfg_get_sec_key_value2 error: [$@]"
+		return 1
+	fi
+	typeset ini_file_name="$1"
+	typeset sec_name="$2"
+	typeset key_name="$3"
+	
+	if [ "X${ini_file_name}" = "X" ]; then
+		install_log DEBUG LIB "Parameters [file name] is empty."
+		return 1
+	fi
+	if [ "X${sec_name}" = "X" ]; then
+		install_log DEBUG LIB "Parameters [section name] is empty."
+		return 1
+	fi
+	if [ "X${key_name}" = "X" ]; then
+		install_log DEBUG LIB "Parameters [key name] is empty."
+		return 1
+	fi
+	
+	if [ ! -f "${ini_file_name}" ]; then
+		install_log DEBUG LIB "Ini file: ${ini_file_name} dosen't exist."
+		return 1
+	fi
+	
+	typeset scount=`egrep "^[ \t]*\[${sec_name}\][ \t]*\$" "${ini_file_name}" | wc -l`
+	if [ ${scount} -ne 1 ]; then
+		install_log DEBUG LIB "The ini file name is incorrect, the section name in the ini file is not unique or the section dosen't exist."
+		return 1
+	fi
+	
+	typeset tmp_ini_file_name="/tmp/cfg_get_sec_key_value2_$$.tmp"
+	awk -vsec="${sec_name}" '
+BEGIN {
+	find=0; 
+	ptn="^[ \t]*[[]" sec "[]][ \t]*$"
+}
+$0 ~ /^[^#]/{
+	if (0 == find)
+	{
+		if ($0 ~ ptn)
+		{
+			find = 1;
+		}
+	}
+	else
+	{
+		if ($0 ~ /^[ \t]*[[]/)
+		{
+			exit 0;
+		}
+		else
+		{
+			print $0;
+		}
+	}
+}' "${ini_file_name}" > "${tmp_ini_file_name}"
+
+	typeset fcount=`wc -l "${tmp_ini_file_name}" | awk '{ print $1; }'`
+	if [ ${fcount} -eq 0 ]; then
+		RETURN[0]=""
+		rm -rf "${tmp_ini_file_name}" > "${IDEPLOY_NULL}" 2 >&1
+		return 0
+	fi
+	
+	typeset kcount=`egrep "^[ \t]*${key_name}[ \t]*=" "${tmp_ini_file_name}" | wc -l`
+	if [ ${kcount} -eq 0 ]; then
+		install_log DEBUG LIB "Can't find the key in this section."
+		return 1
+	elif [ ${kcount} -gt 1 ]; then
+		install_log DEBUG LIB "The ini file format is incorrect, key in the section is not unique."
+		return 1
+	fi
+	
+	typeset rt=`egrep "^[ \t]*${key_name}[ \t]*=" "${tmp_ini_file_name}" | sed "s/^[ \t]*${key_name}[ \t]*=\(.*\)\$/\1/"`
+	rm -rf "${tmp_ini_file_name}" > "${IDEPLOY_NULL}" 2 >&1
+	rt=`echo "${rt}" | sed -e 's/^[ \t][ \t]*//; s/[ \t]*[ \t]$//'`
+	RETURN[0]="${rt}"
+	
+	return 0
+}
+
+################################################################################
+# name    : is_comp_install_in_svg
+# describe: is component need install in svg.
+# param   :
+#           $1 component id
+# output  : RETURN[0]
+# rerurn  : 0:success
+#           1:faild
+################################################################################
+function is_comp_install_in_svg
+{
+	RETURN[0]=""
+	
+	if [ $# -ne 1 ]; then
+		install_log DEBUG DSDP_INSTALL "Parameters count of function: is_comp_install_in_svg error."
+		return 1
+	fi
+	typeset comp_id="$1"
+	typeset rt=0
+	
+	get_svg_component_list
+	typeset idx=0
+	while [ ${idx} -lt ${RETNUM} ]
+	do
+		if [ "X${RETURN[${idx}]}" = "X${comp_id}" ]; then
+			rt=1
+			break
+		fi
+		
+		((idx=idx+1))
+	done
+	
+	RETURN[0]=${rt}
+	return 0
+}
+
+################################################################################
+# name    : _get_rg_for_ne
+# describe: get resource group and link relations of resource groups for ne
+# parameter list:
+#         $1 ne name
+# output  : RETURN[0]
+# rerurn  : 0 succ, 1 failure
+# invoker : private
+################################################################################
+function _get_rg_for_ne
+{
+	typeset ne_name="$1"
+	typeset segment_name="NE-RG-REF"
+	typeset key_name=""
+	typeset dualHostFlag=""
+	
+	#getting machine type
+	get_dm_type
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting dual host type failed."
+		return 1
+	fi
+	typeset dm_type="${RETURN[0]}"
+	
+	if [ "X${dm_type}" = "Xsingle" ]; then
+		install_log DEBUG LIB "Can't find resource groups or link relations of resource group for single machine."
+		return 1
+	fi
+	
+	if [ "X${dm_type}" = "XcoldDualHost" ]; then
+		dualHostFlag="cold"
+	else
+		dualHostFlag="hot"
+	fi
+	
+	#getting config key name
+	cfg_is_exist_sec_key "${ne_rela_config}" "${segment_name}" "${ne_name}.${dualHostFlag}"
+	if [ $? -eq ${ERR_CFG_FILE_KEY_NOT_EXIST} ]; then
+		cfg_is_exist_sec_key "${ne_rela_config}" "${segment_name}" "${ne_name}"
+		if [ $? -eq ${ERR_CFG_FILE_KEY_NOT_EXIST} ]; then
+			install_log DEBUG LIB "Can't find config key."
+			RETURN[0]=""
+			return 1
+		fi
+		
+		key_name="${ne_name}"
+	else
+		key_name="${ne_name}.${dualHostFlag}"
+	fi
+	
+	#reading config item
+	cfg_get_sec_key_value "${ne_rela_config}" "${segment_name}" "${key_name}"
+	#return value has been in RETURN[0]
+	
+	return 0
+}
+
+################################################################################
+# name    : get_rg_for_ne
+# describe: get resource group names for ne
+# parameter list:
+#         $1 ne name
+# output  : RETURN[0]
+# rerurn  : 0 succ, 1 failure
+# invoker : any function
+################################################################################
+function get_rg_for_ne
+{
+	RETURN[0]=""
+	install_log DEBUG LIB "call get_rg_for_ne, parameters: $@"
+	if [ $# -ne 1 ]; then
+		install_log DEBUG LIB "Parameters count of function: get_rg_for_ne failed."
+		return 1
+	fi
+	typeset ne_name="$1"
+	
+	get_local_first_dualhost_ne_name
+	if [ $? -ne 0 ]; then  
+		install_log ERROR LIB "Getting localhost first dualhost failed."
+		return 1 
+	fi
+	typeset first_dual_ne="${RETURN[0]}"
+
+	get_net_struc_business_type
+	if [ $? -ne 0 ]; then
+		install_log "ERROR" "DSDP_INSTALL" "getting business type failed"
+		return 1	
+	fi
+	typeset business_type=${RETURN[0]}
+	
+	_get_rg_for_ne "${ne_name}"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Reading config item failed."
+		return 1
+	fi
+	typeset rt="${RETURN[0]}"
+	typeset rg_list=$(echo "${rt}" | awk -F"|" '{ print $1; }')
+	
+	if [ "x${ne_name}" = "x${first_dual_ne}" ]; then 
+		read_value "dual_type"
+		if [ $? -ne 0 ]; then
+			install_log ERROR LIB "read value dual_type failed"
+			return 1
+		fi
+		typeset dual_type=${RETURN[0]}
+		
+		if [ "x${dual_type}" = "xVCS" ];then
+			install_log DEBUG LIB "VCS software is used, add onesdp_faultspy_rg,onesdp_notifymng_rg to the first ne."
+			RETURN[0]="${rg_list},onesdp_faultspy_rg,onesdp_notifymng_rg,onesdp_nic_rg"
+		else
+			install_log DEBUG LIB "HACS software is used, add nic resource group to the first ne."
+			install_log DEBUG LIB "add onesdp_nic_clone_rg to the first ne."
+			rg_list="onesdp_nic_clone_rg,${rg_list}"
+
+			read_value "base_switch"
+			if [ $? -ne 0 ]; then
+				install_log "ERROR" "read_value" "getting value base_switch failed"
+				return 1
+			fi
+			typeset base_switch=${RETURN[0]}
+
+			typeset i=0
+			typeset localNElist=""
+			get_localmachine_ne_list
+			while [ $i -lt ${RETNUM} ]
+			do
+				localNElist="$localNElist ${RETURN[$i]}"
+				((i=i+1))
+			done
+			if [ "x${back_switch}" = "x1" -a "x${business_type}" != "xsdpall" ];then
+				typeset tmp_localNETypeList=$(echo ${localNElist} | grep "MI")
+				if [ "x${tmp_localNETypeList}" != "x" ];then
+					mi_flag=1
+				fi
+				if [ "x${mi_flag}" = "x1" ];then
+					install_log DEBUG LIB "back plane is installed, and MI is installed in this machine, so add onesdp_backnic_clone_rg to the first ne."
+					rg_list="onesdp_backnic_clone_rg,${rg_list}"
+				else
+					install_log DEBUG LIB "back plane is installed, but MI is not installed in this machine, no need to add onesdp_backnic_clone_rg to the first ne."
+				fi
+			fi
+
+			typeset tmp_lcap_flag=$(echo ${localNElist} | grep "LCAP" |wc -l)
+			if [ "x${base_switch}" = "x1" -o "x${tmp_lcap_flag}" = "x1" ];then
+				install_log DEBUG LIB "base plane is installed, add onesdp_basenic_clone_rg to the first ne."
+				rg_list="onesdp_basenic_clone_rg,${rg_list}"
+			fi
+			RETURN[0]="${rg_list}"
+		fi
+		
+	else 
+		RETURN[0]="${rg_list}"
+	fi
+	
+	return 0
+}
+
+################################################################################
+# name    : get_rg_relations_for_ne
+# describe: get link relations of resource groups for ne
+# parameter list:
+#         $1 ne name
+# output  : RETURN[0]
+# rerurn  : 0 succ, 1 failure
+# invoker : any function
+################################################################################
+function get_rg_relations_for_ne
+{
+	RETURN[0]=""
+	install_log DEBUG LIB "call get_rg_relations_for_ne, parameters: $@"
+	if [ $# -ne 1 ]; then
+		install_log DEBUG LIB "Parameters count of function: get_rg_relations_for_ne failed."
+		return 1
+	fi
+	typeset ne_name="$1"
+	
+	_get_rg_for_ne "${ne_name}"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Reading config item failed."
+		return 1
+	fi
+	typeset rt="${RETURN[0]}"
+	
+	RETURN[0]=$(echo "${rt}" | awk -F"|" '{ print $2; }')
+	return 0
+}
+
+################################################################################
+# name    : get_mountpoint_for_component
+# describe: get mountpoint list for a component.
+# parameter list:
+#         $1 comp name
+# output  : RETNUM      mountpoint number
+#           RETURN[n]   mountpoint list
+# rerurn  : 0 succ, 1 failure
+# invoker : any function
+################################################################################
+function get_mountpoint_for_component
+{
+	RETNUM=0
+	RETURN[0]=""
+	install_log DEBUG LIB "Calling function: get_mountpoint_for_component, parameters: $@."
+	if [ $# -ne 1 ]; then
+		install_log DEBUG LIB "Parameters count of function: get_mountpoint_for_component error."
+		return 1
+	fi
+	typeset comp_id="$1"
+	typeset segment_name="COMPONENT-MOUNTPOINT-REF"
+	
+	cfg_is_exist_sec_key "${ne_rela_config}" "${segment_name}" "${comp_id}"
+	typeset rt=$?
+	#section or key dosen't exist
+	if [ ${rt} -eq ${ERR_CFG_FILE_KEY_NOT_EXIST} -o ${rt} -eq ${ERR_CFG_FILE_SEC_NOT_EXIST} ]; then
+		RETNUM=0
+		RETURN[0]=""
+		return 0
+	elif [ ${rt} -ne 0 ]; then
+		install_log DEBUG LIB "The mountpoint list section for component in config file dosen't exist."
+		return 1
+	fi
+	
+	cfg_get_sec_key_value "${ne_rela_config}" "${segment_name}" "${comp_id}"
+	typeset rt="${RETURN[0]}"
+	
+	RETNUM=0
+	for mnt in $(echo "${rt}" | sed "s/,/ /g")
+	do
+		RETURN[${RETNUM}]="${mnt}"
+		((RETNUM=RETNUM+1))
+	done
+	
+	return 0
+}
+
+################################################################################
+# name    : get_portlist_by_component
+# describe: get port list for a component.
+# parameter list:
+#         $1 comp name
+# output  : RETNUM      port list number
+#           RETURN[n]   port list
+# rerurn  : 0 succ, 1 failure
+# invoker : any function
+################################################################################
+function get_portlist_by_component
+{
+	typeset log_prefix="function get_portlist_by_component::"
+	typeset segment_name="PORT-COMPONENT-REF"
+
+	_get_ne_rela_config "${segment_name}" "$1"
+	
+	if [ $? -ne 0 ]
+	then
+		install_log "DEBUG" "LIB" "${log_prefix} invoke _get_ne_rela_config ${segment_name} $1 error !"
+		return 1
+	fi
+	
+	return 0
+}
+
+################################################################################
+# name    : is_need_set_float_ip_flag
+# describe: is need set float ip flag in prepare start.
+# parameter list:
+#         $1 ne name
+# output  :
+# rerurn  : 0 need config, 1 don't config, 2 failed.
+# invoker : any function
+################################################################################
+function is_need_set_float_ip_flag
+{
+	typeset ne_name="${1}"
+	
+	typeset segment_name="PRESTART-NEED-CONFIG-FLOAT-IP"
+	typeset key_name="ne_list"
+	get_dm_type
+	if [ $? -ne 0 ]
+	then 
+		install_log "DEBUG" "LIB" "Getting dm_type failed"
+		return 2 
+	fi
+	
+	typeset dm_type=${RETURN[0]}
+	
+	get_host_type
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting host type of localhost in dualHost failed."
+		return 2 
+	fi
+	host_type="${RETURN[0]}"
+	
+	if [ "X${dm_type}" != "Xsingle" ]
+	then 
+		if [ "X${host_type}" = "Xmaster" ]
+		then 
+			cfg_is_exist_sec_key "${ne_rela_config}" "${segment_name}" "${key_name}"
+			typeset rt=$?
+			if [ "X${rt}" = "X${ERR_CFG_FILE_SEC_NOT_EXIST}" -o  "X${rt}" = "X${ERR_CFG_FILE_KEY_NOT_EXIST}" ]
+			then 
+				return 1 
+			elif [ "X${rt}" = "X${ERR_CFG_FILE_NOT_EXIST}" -o "X${rt}" = "X${ERR_CFG_PARA_ERROR}" ]
+			then 
+				return 2 
+			else 
+				cfg_get_sec_key_value "${ne_rela_config}" "${segment_name}" "${key_name}"
+				if [ $? -ne 0 ]
+				then
+					return 2 
+				fi
+				typeset ne_list="${RETURN[0]}"
+				echo "${ne_list}"|sed 's/,/ /g'|grep -w "${ne_name}"
+				if [ $? -ne 0 ]
+				then 
+					return 1 
+				else 
+					return 0 
+				fi
+			fi
+		else 
+			return 1
+		fi
+	else
+		return 1 
+	fi
+	
+}
+
+################################################################################
+# name    : get_restart_rg_for_ne
+# describe: get the restart resouce group name for faultspy.
+# parameter list:
+#         $1 ne_name
+# output  : 
+#         the string of resoure group name.
+# rerurn  : 0 succ, 1 failure
+# invoker : any function
+################################################################################
+function get_restart_rg_for_ne
+{
+	RETNUM=0
+	RETURN[0]=""
+	install_log DEBUG LIB "Calling function: get_restart_rg_for_ne, parameters: $@."
+	if [ $# -ne 1 ]; then
+		install_log DEBUG LIB "Parameters count of function: get_restart_rg_for_ne error."
+		return 1
+	fi
+	typeset ne_name="${1}"
+	typeset segment_name="NEED-RESTART-RG"
+	
+	cfg_is_exist_sec_key "${ne_rela_config}" "${segment_name}" "${ne_name}"
+	typeset rt=$?
+	#section or key dosen't exist
+	if [ ${rt} -eq ${ERR_CFG_FILE_KEY_NOT_EXIST} -o ${rt} -eq ${ERR_CFG_FILE_SEC_NOT_EXIST} ]; then
+		RETNUM=0
+		RETURN[0]=""
+		return 0
+	elif [ ${rt} -ne 0 ]; then
+		install_log DEBUG LIB "The resource group list section for component in config file dosen't exist."
+		return 1
+	fi
+	
+	cfg_get_sec_key_value "${ne_rela_config}" "${segment_name}" "${ne_name}"
+	
+	return 0
+}
+
+################################################################################
+# name    : get_component_by_subComp_prefix
+# describe: get the component name by sub component and prefix.
+# parameter list:
+#         $1 sub component name.
+#         $2 prefix 
+# output  : 
+#         the name of component.
+# rerurn  : 0 succ, 1 failure
+# invoker : any function
+################################################################################
+function get_component_by_subComp_prefix
+{
+	segment_name="SUB-COMPONENT-PREFIX"
+	if [ $# -eq 1 ]
+	then 
+		RETURN[0]="${1}"
+		return 0 
+	fi
+	
+	if [ $# -ne 2 ]
+	then 
+		install_log ERROR LIB "The function of get_component_by_subComp_prefix need tow parameters: sub component name and its prefix."
+		return 1 
+	fi
+	
+	sub_comp="${1}"
+	sub_pre="${2}"
+	
+	cfg_is_exist_sec_key "${ne_rela_config}" "${segment_name}" "${sub_comp}"
+	if [ $? -ne 0 ]
+	then
+		install_log ERROR LIB "Cann't find the key ${sub_comp} in segment ${segment_name} of ${ne_rela_config}."
+		return 1 
+	fi
+	
+	cfg_get_sec_key_value "${ne_rela_config}" "${segment_name}" "${sub_comp}"
+	if [ $? -ne 0 ]
+	then 
+		install_log ERROR LIB "Getting the key ${sub_comp} in segment ${segment_name} of ${ne_rela_config} failed."
+		return 1 
+	fi
+	com_prefix_str="${RETURN[0]}"
+	
+	com_prefix_list=$(echo "${com_prefix_str}" |sed 's#,# #g')
+	for com_prefix in ${com_prefix_list}
+	do
+		tmp_comp=$(echo ${com_prefix}|awk -vpre=${sub_pre} -F\| '{if (pre == $2)print $1;}')
+		if [ "X${tmp_comp}" != "X" ]
+		then 
+			RETURN[0]="${tmp_comp}"
+			return 0 
+		fi
+	done
+	
+	install_log ERROR LIB "Cann't find the key ${sub_comp} in segment ${segment_name} of ${ne_rela_config}."
+	return 1
+}
+
+typeset ne_rela_config="${IDEPLOY_PKG_PATH}/script/up_small.ini"

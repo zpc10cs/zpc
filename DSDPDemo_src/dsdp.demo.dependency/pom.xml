@@ -1,0 +1,29 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>com.huawei.jaguar</groupId>
+		<artifactId>dsdp.demo</artifactId>
+		<version>V500R005C00B090</version>
+	</parent>
+	<artifactId>dsdp.demo.dependency</artifactId>
+	
+	<dependencies>
+		<dependency>
+			<groupId>com.huawei.jaguar</groupId>
+			<artifactId>dsdp.demo.dao.impl</artifactId>
+			<version>${dsdp.demo.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>com.huawei.jaguar</groupId>
+			<artifactId>dsdp.demo.service.impl</artifactId>
+			<version>${dsdp.demo.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>com.huawei.jaguar</groupId>
+			<artifactId>dsdp.demo.business.impl</artifactId>
+			<version>${dsdp.demo.version}</version>
+		</dependency>
+	</dependencies>
+	<packaging>pom</packaging>
+</project>

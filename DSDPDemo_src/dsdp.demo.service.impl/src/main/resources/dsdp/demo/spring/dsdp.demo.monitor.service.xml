@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:util="http://www.springframework.org/schema/util" xmlns:dsf="http://www.huawei.com/schema/dsf"
+	xsi:schemaLocation=" 
+        http://www.springframework.org/schema/beans 
+        http://www.springframework.org/schema/beans/spring-beans-3.0.xsd 
+        http://www.springframework.org/schema/util 
+        http://www.springframework.org/schema/util/spring-util-3.0.xsd 
+        http://www.huawei.com/schema/dsf 
+        http://www.huawei.com/schema/dsf/spring-dsf-1.0.xsd">
+        
+    <bean id="dsdpdemo.oracleConnectionPoolMonitorService"
+		class="com.huawei.jaguar.dsdp.demo.service.dfx.status.OracleConnectionPoolMonitorServiceImpl">
+		<property name="oracleDataSource" ref="dsdpdemo.dataSource"></property>
+		<property name="oracleConnPoolName" value="Dsdpdemo_Oracle_ConnectionPool"></property>
+	</bean>
+	
+	<bean id="dsdpdemo.redisConnectionPoolMonitorService"
+		class="com.huawei.jaguar.dsdp.demo.service.dfx.status.RedisConnectionPoolMonitorServiceImpl">
+		<property name="redisCacheManager" ref="dsdpdemo.redisCacheManager"></property>
+		<property name="redisConnPoolName" value="Dsdpdemo_Redis_ConnectionPool"></property>
+	</bean>
+
+	<bean id="dsdpdemo.depMonitor"
+		class="com.huawei.jaguar.commons.sdk.maintenance.monitor.client.DepMonitor" />
+	
+	<bean id="cdsdpdemo.dsfHealthChecker"
+		class="com.huawei.jaguar.commons.sdk.maintenance.monitor.client.dsf.check.DSFHealthChecker">
+		<property name="dsfServiceBeanID" value="dsf.dsdpdemo.monitor.DSFHealthService" />
+	</bean>
+	
+	<bean id="dsdpdemo.dsfHealthService"
+		class="com.huawei.jaguar.dsdp.demo.service.dfx.status.DSFHealthServiceImpl">
+		<property name="dbHealthDao" ref="dsdpdemo.dbHealthDao" />
+	</bean>
+	
+	<bean id="dsdpdemo.dsfHealthRouter"
+		class="com.huawei.jaguar.commons.sdk.maintenance.monitor.client.dsf.check.DSFHealthRouter"
+		init-method="init">
+		<property name="serverIP" value="${dsdpdemo.localIP}" />
+		<property name="serverPort" value="${dsdpdemo.dsf.port}" />
+	</bean>
+
+	<dsf:importer name="dsf.dsdpdemo.monitor.DSFHealthService"
+		interface="com.huawei.jaguar.commons.sdk.maintenance.monitor.client.dsf.DSFHealthService"
+		service-name="dsdpdemo.monitor.DSFHealthService"
+		router="dsdpdemo.dsfHealthRouter" />
+</beans>

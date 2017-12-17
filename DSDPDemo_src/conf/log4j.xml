@@ -1,0 +1,489 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE log4j:configuration SYSTEM "log4j.dtd">
+<log4j:configuration xmlns:log4j='http://jakarta.apache.org/log4j/'>
+	<appender name="STDOUT" class="org.apache.log4j.ConsoleAppender">
+		<layout class="com.huawei.bme.commons.log4j.BMEPatternLayout">
+			<param name="TimeZoneID" value="${local.timezone}" />
+			<param name="ConversionPattern"
+				value="%D{yyyy-MM-dd HH:mm:ss.SSS}|%X{level}|%X{moduleName}|%X{traceID}|%m|%X{appendInfo}|%X{exceptionMessage}|%X{fullInfo} %n" />
+		</layout>
+	</appender>
+
+	<appender name="STATE_LOG"
+		class="com.huawei.jaguar.commons.sdk.log.appender.InterFaceLogFileAppender">
+		<param name="File" value="${csc.home}/logs/run/dsdpdemo_service_run.log" />
+		<param name="MaxFileSize" value="10MB" />
+		<param name="MaxBackupIndex" value="10" />
+		<layout class="com.huawei.jaguar.commons.sdk.log.layout.StateLogLayout">
+			<param name="moduleName" value="DSDPDEMO" />
+			<param name="staticInfo" value="SERVICE INFORMATION" />
+			<param name="ConversionPattern"
+				value="%d{yyyy-MM-dd HH:mm:ss.SSS} | %p | %moduleName | %resourceInfo | %localIp | %m%n" />
+		</layout>
+	</appender>
+
+	<appender name="OPERATION_LOG"
+		class="com.huawei.jaguar.commons.sdk.log.appender.InterFaceLogFileAppender">
+		<param name="File" value="${csc.home}/logs/operate/dsdpdemo_operate.log" />
+		<param name="MaxFileSize" value="100MB" />
+		<param name="MaxBackupIndex" value="10" />
+		<layout class="com.huawei.bme.commons.log4j.BMEPatternLayout">
+			<param name="TimeZoneID" value="${local.timezone}" />
+			<param name="ConversionPattern"
+				value="%D{yyyy-MM-dd HH:mm:ss.SSS}|%X{level}|%X{moduleName}|%X{operator}|%X{operationName}|%X{operationRes}|%m|%X{appendInfo} %n" />
+		</layout>
+	</appender>
+
+	<appender name="SECURITY_LOG"
+		class="com.huawei.jaguar.commons.sdk.log.appender.InterFaceLogFileAppender">
+		<param name="File" value="${csc.home}/logs/security/dsdpdemo_security.log" />
+		<param name="MaxFileSize" value="100MB" />
+		<param name="MaxBackupIndex" value="10" />
+		<layout class="com.huawei.bme.commons.log4j.BMEPatternLayout">
+			<param name="TimeZoneID" value="${local.timezone}" />
+			<param name="ConversionPattern"
+				value="%D{yyyy-MM-dd HH:mm:ss.SSS}|%X{level}|%X{moduleName}|%X{userID}|%X{operationRes}|%m|%X{appendInfo} %n" />
+		</layout>
+	</appender>
+
+	<appender name="RUN_LOG"
+		class="com.huawei.jaguar.commons.sdk.log.appender.InterFaceLogFileAppender">
+		<param name="File" value="${csc.home}/logs/run/dsdpdemo_run.log" />
+		<param name="MaxFileSize" value="100MB" />
+		<param name="MaxBackupIndex" value="10" />
+		<layout class="com.huawei.bme.commons.log4j.BMEPatternLayout">
+			<param name="TimeZoneID" value="${local.timezone}" />
+			<param name="ConversionPattern" value="%D|%X{level}|%X{moduleName}|%m|%X{appendInfo} %n" />
+		</layout>
+	</appender>
+
+	<appender name="USER_LOG"
+		class="com.huawei.jaguar.commons.sdk.log.appender.InterFaceLogFileAppender">
+		<param name="File" value="${csc.home}/logs/user/dsdpdemo_user.log" />
+		<param name="MaxFileSize" value="100MB" />
+		<param name="MaxBackupIndex" value="10" />
+		<layout class="com.huawei.bme.commons.log4j.BMEPatternLayout">
+			<param name="TimeZoneID" value="${local.timezone}" />
+			<param name="ConversionPattern"
+				value="%D{yyyy-MM-dd HH:mm:ss.SSS}|%X{level}|%X{moduleName}|%X{userID}|%m|%X{appendInfo} %n" />
+		</layout>
+	</appender>
+
+	<appender name="DEBUG_LOG"
+		class="com.huawei.jaguar.commons.sdk.log.appender.InterFaceLogFileAppender">
+		<param name="File" value="${csc.home}/logs/debug/dsdpdemo_debug.log" />
+		<param name="MaxFileSize" value="100MB" />
+		<param name="MaxBackupIndex" value="10" />
+		<layout class="com.huawei.jaguar.commons.sdk.log.layout.DebugLogLayout">
+			<param name="moduleName" value="DSDPDEMO" />
+			<param name="ConversionPattern"
+				value="%d{yyyy-MM-dd HH:mm:ss.SSS}|%t|%X{level}|%X{moduleName}|%X{traceID}|%m|%X{appendInfo}|%X{exceptionMessage}|%X{fullInfo} %n" />
+		</layout>
+	</appender>
+
+	<appender name="DEP_STATISTIC_LOG"
+		class="com.huawei.jaguar.commons.sdk.log.appender.InterFaceLogFileAppender">
+		<param name="File" value="${csc.home}/logs/static/dsdpdemo_static.log" />
+		<param name="MaxBackupIndex" value="10" />
+		<param name="MaxFileSize" value="100MB" />
+		<layout class="com.huawei.bme.commons.log4j.BMEPatternLayout">
+			<param name="TimeZoneID" value="${local.timezone}" />
+			<param name="ConversionPattern"
+				value="%D{yyyy-MM-dd HH:mm:ss.SSS}|%X{level}|%X{moduleName}|%X{traceID}|%m|%X{appendInfo}|%X{exceptionMessage}| %X{fullInfo} %n" />
+		</layout>
+	</appender>
+
+	<appender name="RESOURCE_PERF_LOG"
+		class="com.huawei.jaguar.commons.sdk.log.appender.InterFaceLogFileAppender">
+		<param name="File"
+			value="${csc.home}/logs/perf/dsdpdemo_ResourceKPI_perf.log" />
+		<param name="MaxBackupIndex" value="10" />
+		<param name="MaxFileSize" value="100MB" />
+		<layout class="com.huawei.jaguar.commons.sdk.log.layout.PerfLogLayout">
+			<param name="moduleName" value="DSDPDEMO" />
+			<param name="ConversionPattern" value="%d{yyyy-MM-dd HH:mm:ss},%localIp,%moduleName,%m%n" />
+			<param name="fileHead"
+				value="time,hostip,ne,maxUsedMemory,minUsedMemory,avgUsedMemory,maxFreeThreads,minFreeThreads,avgFreeThreads" />
+		</layout>
+	</appender>
+
+	<appender name="INTERFACE_PERF_LOG"
+		class="com.huawei.jaguar.commons.sdk.log.appender.InterFaceLogFileAppender">
+		<param name="File"
+			value="${csc.home}/logs/perf/dsdpdemo_InterfaceKPI_perf.log" />
+		<param name="MaxBackupIndex" value="10" />
+		<param name="MaxFileSize" value="100MB" />
+		<layout class="com.huawei.jaguar.commons.sdk.log.layout.PerfLogLayout">
+			<param name="moduleName" value="DSDPDEMO" />
+			<param name="ConversionPattern" value="%d{yyyy-MM-dd HH:mm:ss},%localIp,%moduleName,%m%n" />
+			<param name="fileHead"
+				value="time,hostip,ne,servicename,requestNum,successfulRspNum,failedRspNum,succeedRate,maxDelayTime,minDelayTime,avgDelayTime,delayTimePeriodRspNum,MaxTPS,MinTPS,AvgTPS,CurSessionNum" />
+		</layout>
+	</appender>
+
+	<appender name="ALARM_LOG"
+		class="com.huawei.jaguar.commons.sdk.log.appender.InterFaceLogFileAppender">
+		<param name="File" value="${csc.home}/logs/run/dsdpdemo_alarm_run.log" />
+		<param name="MaxFileSize" value="100MB" />
+		<param name="MaxBackupIndex" value="10" />
+		<layout class="com.huawei.jaguar.commons.sdk.log.layout.AlarmLogLayout">
+			<param name="moduleName" value="DSDPDEMO" />
+			<param name="ConversionPattern"
+				value="%d{yyyy-MM-dd HH:mm:ss.SSS} | %p | %moduleName | %m %n" />
+		</layout>
+	</appender>
+
+	<appender name="TRACELINK"
+		class="com.huawei.bme.commons.trace.util.TraceRollingFileAppender">
+		<param name="File" value="${csc.home}/logs/call/dsdpdemo_call.log" />
+		<param name="MaxFileSize" value="100MB" />
+		<param name="MaxBackupIndex" value="10" />
+		<layout class="com.huawei.bme.commons.log4j.BMEPatternLayout">
+			<param name="TimeZoneID" value="${local.timezone}" />
+			<param name="ConversionPattern"
+				value="&lt;&lt;&lt;%X{traceID}|%X{calledNodeID}|%X{calledClusterId}|%X{calledIP}|%X{callingNodeID}|%X{callingIP}|%X{flag}|%X{appName}|%X{subSysName}|%X{protocol}|%X{beginTime}|%X{endTime}|%X{reqMsgSize}|%X{rspMsgSize}|%X{resultCode}|%X{resultInfo}|%X{seqNo}|%X{CallNumber}|%X{extendInfo}|%X{PlatformExtendInfo}|%X{CodeStream}&gt;&gt;&gt; %n" />
+		</layout>
+	</appender>
+
+	<appender name="ASYNC_TRACELINK"
+		class="com.huawei.bme.commons.trace.AsyncTraceAppender">
+		<param name="BufferSize" value="2048" />
+		<appender-ref ref="TRACELINK" />
+	</appender>
+
+	<appender
+		class="com.huawei.jaguar.commons.sdk.log.appender.InterFaceLogFileAppender"
+		name="ETRACE_LOG">
+		<param name="File" value="${csc.home}/logs/debug/dsdpdemo_etrace_debug.log" />
+		<param name="MaxFileSize" value="10MB" />
+		<param name="MaxBackupIndex" value="10" />
+		<layout class="com.huawei.jaguar.commons.sdk.log.layout.DebugLogLayout">
+			<param name="moduleName" value="DSDPDEMO" />
+		</layout>
+	</appender>
+
+	<appender name="LOG_TRACE"
+		class="com.huawei.bme.commons.util.BMERollingFileAppender">
+		<param name="File" value="${csc.home}/logs/trace/trace_task_trace.log" />
+		<param name="MaxFileSize" value="10MB" />
+		<param name="MaxBackupIndex" value="10" />
+		<layout class="com.huawei.bme.commons.log4j.BMEPatternLayout">
+			<param name="TimeZoneID" value="${local.timezone}" />
+			<param name="ConversionPattern"
+				value="&lt;&lt;&lt;%D{yyMMddHHmmss.SSS}|%X{level}|%X{taskID}|%X{traceID}|%X{traceOrder}|%t|%X{nodeID}|DSDPDEMO|%X{tracelinkID}|%X{seqNo}|%X{logType}|%m|%X{appendInfo}|%X{exceptionMessage}|%X{fullInfo} &gt;&gt;&gt; %n" />
+		</layout>
+	</appender>
+
+	<appender name="USF"
+		class="com.huawei.jaguar.commons.sdk.log.appender.InterFaceLogFileAppender">
+		<param name="File" value="${csc.home}/logs/platform/usf.log" />
+		<param name="MaxFileSize" value="10MB" />
+		<param name="MaxBackupIndex" value="10" />
+		<layout class="com.huawei.bme.commons.log4j.BMEPatternLayout">
+			<param name="TimeZoneID" value="${local.timezone}" />
+			<param name="ConversionPattern"
+				value="%D|%X{level}|%X{moduleName}|%X{traceID}|%m|%X{appendInfo}|%X{exceptionMessage}| %X{fullInfo} %n" />
+		</layout>
+	</appender>
+
+	<appender name="ZK"
+		class="com.huawei.jaguar.commons.sdk.log.appender.InterFaceLogFileAppender">
+		<param name="File" value="${csc.home}/logs/platform/zk.log" />
+		<param name="MaxFileSize" value="10MB" />
+		<param name="MaxBackupIndex" value="10" />
+		<layout class="com.huawei.bme.commons.log4j.BMEPatternLayout">
+			<param name="TimeZoneID" value="${local.timezone}" />
+			<param name="ConversionPattern"
+				value="%D|%X{level}|%X{moduleName}|%X{traceID}|%m|%X{appendInfo}|%X{exceptionMessage}| %X{fullInfo} %n" />
+		</layout>
+	</appender>
+
+	<appender name="THREADPOOL_MONITOR"
+		class="com.huawei.jaguar.commons.sdk.log.appender.InterFaceLogFileAppender">
+		<param name="File" value="${csc.home}/logs/platform/threadpool_monitor.log" />
+		<param name="MaxFileSize" value="10MB" />
+		<param name="MaxBackupIndex" value="10" />
+		<layout class="com.huawei.bme.commons.log4j.BMEPatternLayout">
+			<param name="TimeZoneID" value="${local.timezone}" />
+			<param name="ConversionPattern"
+				value="%D|%X{level}|%X{moduleName}|%X{traceID}|%m|%X{appendInfo}|%X{exceptionMessage}| %X{fullInfo} %n" />
+		</layout>
+	</appender>
+	<appender name="SLOW_SERVICE"
+		class="com.huawei.jaguar.commons.sdk.log.appender.InterFaceLogFileAppender">
+		<param name="File" value="${csc.home}/logs/platform/slow_service.log" />
+		<param name="MaxFileSize" value="10MB" />
+		<param name="MaxBackupIndex" value="10" />
+		<layout class="com.huawei.bme.commons.log4j.BMEPatternLayout">
+			<param name="TimeZoneID" value="${local.timezone}" />
+			<param name="ConversionPattern"
+				value="%D|%X{moduleName}|%m|%X{appendInfo}|%X{exceptionMessage}| %X{fullInfo} %n" />
+		</layout>
+	</appender>
+
+	<appender name="ZOOKEEPER"
+		class="com.huawei.jaguar.commons.sdk.log.appender.InterFaceLogFileAppender">
+		<param name="File" value="${csc.home}/logs/platform/zookeeper.log" />
+		<param name="MaxFileSize" value="10MB" />
+		<param name="MaxBackupIndex" value="10" />
+		<layout class="com.huawei.bme.commons.log4j.BMEPatternLayout">
+			<param name="TimeZoneID" value="${local.timezone}" />
+			<param name="ConversionPattern"
+				value="%D{yyyy-MM-dd HH:mm:ss.SSS} | %p | ZOOKEEPER | [%t]%m | %l%n" />
+		</layout>
+	</appender>
+
+	<appender name="REMOTING"
+		class="com.huawei.jaguar.commons.sdk.log.appender.InterFaceLogFileAppender">
+		<param name="File" value="${csc.home}/logs/platform/remoting.log" />
+		<param name="MaxFileSize" value="10MB" />
+		<param name="MaxBackupIndex" value="10" />
+		<layout class="com.huawei.bme.commons.log4j.BMEPatternLayout">
+			<param name="TimeZoneID" value="${local.timezone}" />
+			<param name="ConversionPattern"
+				value="%t|%D|%X{level}|%X{moduleName}|%X{traceID}|%m|%X{appendInfo}|%X{exceptionMessage}| %X{fullInfo} %n" />
+		</layout>
+	</appender>
+	<appender name="REMOTING_IOSTATISTICS"
+		class="com.huawei.jaguar.commons.sdk.log.appender.InterFaceLogFileAppender">
+		<param name="File"
+			value="${csc.home}/logs/platform/remoting_iostatistics.log" />
+		<param name="MaxFileSize" value="10MB" />
+		<param name="MaxBackupIndex" value="10" />
+		<layout class="com.huawei.bme.commons.log4j.BMEPatternLayout">
+			<param name="TimeZoneID" value="${local.timezone}" />
+			<param name="ConversionPattern"
+				value="%D|%X{level}|%X{moduleName}|%X{traceID}|%m|%X{appendInfo}|%X{exceptionMessage}| %X{fullInfo} %n" />
+		</layout>
+	</appender>
+	<appender name="REMOTING_NETTY"
+		class="com.huawei.jaguar.commons.sdk.log.appender.InterFaceLogFileAppender">
+
+		<param name="File" value="${csc.home}/logs/platform/remoting.log" />
+		<param name="MaxFileSize" value="10MB" />
+		<param name="MaxBackupIndex" value="10" />
+		<layout class="com.huawei.bme.commons.log4j.BMEPatternLayout">
+			<param name="TimeZoneID" value="${local.timezone}" />
+			<param name="ConversionPattern" value="%t|%D|%p|NETTY|%m| %l%n" />
+		</layout>
+	</appender>
+	
+	<appender name="DEP_LICENSE_DEBUG"
+       class="com.huawei.jaguar.commons.sdk.log.appender.InterFaceLogFileAppender">
+       <param name="File"
+           value="${csc.home}/logs/debug/license_debug.log" />
+       <param name="MaxBackupIndex" value="10" />
+       <param name="MaxFileSize" value="10MB" />
+       <layout class="com.huawei.jaguar.commons.sdk.log.layout.DebugLogLayout">
+           <param name="moduleName" value="XXX" />
+           <param name="ConversionPattern"
+              value="%d|%p|%X{moduleName}|%X{traceID}|%m|%X{appendInfo}|%X{exceptionMessage}|%X{fullInfo} %n" />
+       </layout>
+    </appender>
+	
+	
+
+	<category name="com.huawei.jaguar.commons" additivity="false">
+		<priority value="ERROR" />
+		<appender-ref ref="DEBUG_LOG" />
+	</category>
+
+	<category name="com.huawei.commons" additivity="false">
+		<priority value="ERROR" />
+		<appender-ref ref="DEBUG_LOG" />
+	</category>
+
+	<category name="com.huawei.csc.usf.framework" additivity="false">
+		<priority value="ERROR" />
+		<appender-ref ref="USF" />
+	</category>
+	<category name="com.huawei.csc.usf.adapter.dsf" additivity="false">
+		<priority value="ERROR" />
+		<appender-ref ref="USF" />
+	</category>
+	<category name="com.huawei.csc.usf.registry.zk" additivity="false">
+		<priority value="ERROR" />
+		<appender-ref ref="ZK" />
+	</category>
+
+	<category name="default_threadpool_monitor_handler"
+		additivity="false">
+		<priority value="INFO" />
+		<appender-ref ref="THREADPOOL_MONITOR" />
+	</category>
+	<category name="slowService" additivity="false">
+		<priority value="ERROR" />
+		<appender-ref ref="SLOW_SERVICE" />
+	</category>
+
+	<category name="com.huawei.csc.remoting" additivity="false">
+		<priority value="ERROR" />
+		<appender-ref ref="REMOTING" />
+	</category>
+	<category name="com.huawei.csc.remoting.common.iostatistics"
+		additivity="false">
+		<priority value="ERROR" />
+		<appender-ref ref="REMOTING_IOSTATISTICS" />
+	</category>
+
+	<category name="io.netty" additivity="false">
+		<priority value="ERROR" />
+		<appender-ref ref="REMOTING_NETTY" />
+	</category>
+
+	<category name="LogTrace" additivity="false">
+		<priority value="DEBUG" />
+		<appender-ref ref="LOG_TRACE" />
+	</category>
+
+
+	<category additivity="false" name="ETRACE">
+		<priority value="ERROR" />
+		<appender-ref ref="ETRACE_LOG" />
+	</category>
+
+	<category name="com.huawei.soa.foundation.remoting"
+		additivity="false">
+		<priority value="ERROR" />
+		<appender-ref ref="REMOTING" />
+	</category>
+
+	<category name="TraceLink@com.huawei.bme" additivity="false">
+		<priority value="INFO" />
+		<appender-ref ref="TRACELINK" />
+	</category>
+
+	<category name="AsyncTraceLink@com.huawei.bme" additivity="false">
+		<priority value="INFO" />
+		<appender-ref ref="ASYNC_TRACELINK" />
+	</category>
+
+	<appender name="DEP_DSDPDEMO_SYSTEM"
+		class="com.huawei.jaguar.commons.sdk.log.appender.InterFaceLogFileAppender">
+		<param name="File" value="${csc.home}/logs/run/dsdpdemo_system_run.log" />
+		<param name="MaxBackupIndex" value="10" />
+		<param name="MaxFileSize" value="100MB" />
+		<layout class="com.huawei.jaguar.commons.sdk.log.layout.SystemLogLayout">
+			<param name="moduleName" value="DSDPDEMO" />
+		</layout>
+	</appender>
+
+	<appender name="DEP_DSDPDEMO_TASK"
+		class="com.huawei.jaguar.commons.sdk.log.appender.InterFaceLogFileAppender">
+		<param name="File" value="${csc.home}/logs/run/dsdpdemo_task_run.log" />
+		<param name="MaxBackupIndex" value="10" />
+		<param name="MaxFileSize" value="100MB" />
+		<layout class="com.huawei.jaguar.commons.sdk.log.layout.TaskLogLayout">
+			<param name="moduleName" value="DSDPDEMO" />
+		</layout>
+	</appender>
+
+	<appender name="REDIS_PERF_LOG"
+		class="com.huawei.jaguar.commons.sdk.log.appender.InterFaceLogFileAppender">
+		<param name="File" value="${csc.home}/logs/perf/dsdpdemo_RedisKPI_perf.log" />
+		<param name="MaxBackupIndex" value="10" />
+		<param name="MaxFileSize" value="20MB" />
+		<layout class="com.huawei.jaguar.commons.sdk.log.layout.PerfLogLayout">
+			<param name="moduleName" value="DSDPDEMO" />
+			<param name="ConversionPattern" value="%d{yyyy-MM-dd HH:mm:ss},%localIp,%moduleName,%m%n" />
+			<param name="fileHead" value="time,hostip,moduleName,key,totalNum,successNum" />
+		</layout>
+	</appender>
+
+	<category name="REDIS_PERF_LOG" additivity="false">
+		<priority value="INFO" />
+		<appender-ref ref="REDIS_PERF_LOG" />
+	</category>
+
+	<category name="DEP_STATISTIC_LOG" additivity="false">
+		<priority value="ERROR" />
+		<appender-ref ref="DEP_STATISTIC_LOG" />
+	</category>
+
+	<category name="Runtime@com.huawei.jaguar.dsdp.demo"
+		additivity="false">
+		<priority value="INFO" />
+		<appender-ref ref="RUN_LOG" />
+	</category>
+
+	<category name="Security@com.huawei.jaguar.dsdp.demo"
+		additivity="false">
+		<priority value="INFO" />
+		<appender-ref ref="SECURITY_LOG" />
+	</category>
+
+	<category name="Operation@com.huawei.jaguar.dsdp.demo"
+		additivity="false">
+		<priority value="INFO" />
+		<appender-ref ref="OPERATION_LOG" />
+	</category>
+
+	<category name="User@com.huawei.jaguar.dsdp.demo" additivity="false">
+		<priority value="INFO" />
+		<appender-ref ref="USER_LOG" />
+	</category>
+
+	<category name="com.huawei.jaguar.dsdp.demo" additivity="false">
+		<priority value="ERROR" />
+		<appender-ref ref="DEBUG_LOG" />
+	</category>
+
+	<category name="org.apache.zookeeper" additivity="false">
+		<priority value="ERROR" />
+		<appender-ref ref="ZOOKEEPER" />
+	</category>
+
+	<!-- SYSTEM LOG -->
+	<category name="DSDPDEMO_SYSTEM_LOG" additivity="false">
+		<priority value="INFO" />
+		<appender-ref ref="DEBUG_LOG" />
+		<appender-ref ref="DEP_DSDPDEMO_SYSTEM" />
+	</category>
+
+	<category name="Runtime@SQLTIMEOUT_LOG" additivity="false">
+		<priority value="INFO" />
+		<appender-ref ref="DEP_DSDPDEMO_SYSTEM" />
+	</category>
+
+	<!--TASK LOG -->
+	<category name="DSDPDEMO_TASK_LOG" additivity="false">
+		<priority value="INFO" />
+		<appender-ref ref="DEBUG_LOG" />
+		<appender-ref ref="DEP_DSDPDEMO_TASK" />
+	</category>
+
+	<!--RESOURCE PERF LOG -->
+	<category name="RESOURCE_PERF_LOG" additivity="false">
+		<priority value="INFO" />
+		<appender-ref ref="RESOURCE_PERF_LOG" />
+	</category>
+
+	<!--INTERFACE PERF LOG -->
+	<category name="INTERFACE_PERF_LOG" additivity="false">
+		<priority value="INFO" />
+		<appender-ref ref="INTERFACE_PERF_LOG" />
+	</category>
+
+	<!--ALARM LOG -->
+	<category name="Runtime@ALARMLOG" additivity="false">
+		<priority value="INFO" />
+		<appender-ref ref="ALARM_LOG" />
+	</category>
+
+	<category name="STATELOG" additivity="false">
+		<priority value="INFO" />
+		<appender-ref ref="STATE_LOG" />
+	</category>
+	
+	<!--LICENSE LOG -->
+	<category name="com.huawei.jaguar.license" additivity="false">
+       <priority value="ERROR" />
+       <appender-ref ref="DEP_LICENSE_DEBUG" />
+    </category>
+	
+
+	<root>
+		<priority value="ERROR" />
+		<appender-ref ref="STDOUT" />
+	</root>
+</log4j:configuration>

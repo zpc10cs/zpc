@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<policies>
+	<policy id="startup" desc="BME.UCONFIGDESC.STARTUP">
+		<extension type="document">classpath*:*.fixture.xml</extension>
+	</policy>	
+</policies>

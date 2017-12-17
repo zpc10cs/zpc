@@ -1,0 +1,85 @@
+#!/bin/sh 
+
+function show_help
+{	
+    echo "Usage:  updatecfg -f file -t type -m module      "  
+    echo "type:"
+    echo "    resource|service|resultcode    "
+    echo "module:"
+    echo "    such as:  content|product|order|subscribe|charging|publicinfo|upm|sns|plmf|payment|cgw|campaign|channelMgmt|marketingmgmt|tag"
+    echo "Example:"
+    echo "    updatecfg -f resource.properties -t resource -m order     "
+}
+
+typeset para=$5
+typeset comp_name=$6
+
+# shell file path
+APP_HOME=$(cd "$(dirname "$0")"; pwd)
+
+#check comp name; right 0, wrong 1
+CheckCompName()
+{
+    #compNameList="sns upm content product charging publicinfo campaign plmf order subscribe all "
+    compNameList=`cat $APP_HOME/compinfo.cfg | grep "\["  | awk -F '[' '{print $2}' | awk -F ']' '{print $1}'` 
+    compNameList="all "$compNameList
+    for line in $compNameList
+        do
+            if [ "$line" = "$1" ]; then
+                return 0 
+            fi  
+        done
+    
+    return 1
+}
+
+
+if [ "X${para}" != "X-m" ];then
+    show_help
+    exit 1
+else
+    CheckCompName $comp_name
+    if [ $? -ne 0 ];then
+        echo "ERROR:" "Module name \"${comp_name}\" does not exist."
+        exit 1
+    fi
+fi
+
+# get libpath from compinfo.cfg
+GetCompPath()
+{
+    tempFileName=tmp_file_`date +%s`.bak
+            
+    #read compinfo.cfg
+    awk -F# '{print $1}' "$APP_HOME/compinfo.cfg" |     
+    sed '/^[    ]*$/d' |                    
+    sed -n "/^[     ]*\[[   ]*$1[  ]*\]/,/^[       ]*\[.*\]/p" | 
+    sed '/^[        ]*\[.*\]/d' > $tempFileName    
+
+    comp_path=$(cat $tempFileName | grep libpath | awk -F= '{print $2}')
+    rm $tempFileName
+    echo $comp_path | sed 's/[ \r]*$//g'
+}
+
+# get confpath from compinfo.cfg
+GetConfPath()
+{
+    tempFileName=tmp_file_`date +%s`.bak
+       
+    #read compinfo.cfg
+    awk -F# '{print $1}' "$APP_HOME/compinfo.cfg" |     
+    sed '/^[    ]*$/d' |                    
+    sed -n "/^[     ]*\[[   ]*$1[  ]*\]/,/^[       ]*\[.*\]/p" | 
+    sed '/^[        ]*\[.*\]/d' > $tempFileName    
+
+    conf_path=$(cat $tempFileName | grep confpath | awk -F= '{print $2}')
+    rm $tempFileName
+    echo $conf_path | sed 's/[ \r]*$//g'
+}
+
+
+# Setup LOGSET_HOME
+export COMP_HOME=$(GetCompPath $comp_name)
+export CONF_HOME=$(GetConfPath $comp_name)
+
+$APP_HOME/updatecfg.sh $@

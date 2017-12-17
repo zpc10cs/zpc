@@ -1,0 +1,30 @@
+﻿<project name="DSDP_Demo" default="build" basedir="../">
+	<property name="pkg.dir" value="${basedir}/install/DS_dsdpdemo_install/apppkg" />
+
+	<target name="build">
+		<antcall target="clean" />
+		<antcall target="copy" />
+		<antcall target="compressIdeployPkg" />
+	</target>
+
+	<target name="clean">
+		<!--删除旧包-->
+		<delete dir="${pkg.dir}" failonerror="false" />
+		<mkdir dir="${pkg.dir}" />
+		<delete file="${basedir}/install/DS_dsdpdemo_install.zip" failonerror="false" />
+	</target>
+
+	<target name="copy">
+		<copy todir="${pkg.dir}">
+			<fileset dir="${basedir}/target/assembly">
+				<include name="DSDPDEMO*.tar.gz" />
+			</fileset>
+		</copy>
+	</target>
+
+	<target name="compressIdeployPkg">
+		<!-- 压缩ideploy发布包-->
+		<zip destfile="${basedir}/install/DS_dsdpdemo_install.zip" basedir="${basedir}/install/" includes="DS_dsdpdemo_install/**/*" />
+	</target>
+</project>
+

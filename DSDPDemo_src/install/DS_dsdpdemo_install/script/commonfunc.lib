@@ -1,0 +1,2246 @@
+#!/usr/bin/ksh
+
+################################################################################
+# Name		 : commonfunc.lib
+# Describe	 : common function shell library for developers.
+# Date		 : 2008-11-20
+# Functions	 :
+#			   update_cfg_value		   update properties file.
+#			   read_xml_tag			   read node value of xml.
+#			   update_xml_tag		   update node value of xml.
+#			   read_xml_tag_spec	   read special node value of xml.
+#			   update_xml_tag_spec	   update special node value of xml.
+#			   port_is_available	   verify port whether it is available.
+#			   get_free_ports		   get specified number of free ports.
+#			   is_integer2			   check a string whether it is an positive integer or not.
+#			   set_progress_range	   set global progress range of a component.
+#			   install_progress		   output install progress in a component.
+#			   env_init_cmd			   generate a command list to initialize
+#									   component shell environment.
+#			   run_vcs_cmd			   run vcs command.
+#			   exec_cmd				   execute special command, and store stdout/stderr.
+#			   get_nic_name			   get localhost ip binding NIC name.
+#			   get_base_nic_name	   get base ip binding NIC name.
+#			   get_net_mask			   get localhost net mask.
+#			   rpm_install			   install rpm package.
+#			   vcs_parameter_modify	   modify vcs parameter
+#			   get_base_physics_ip	   get base physics ip
+#			   decodePwd			   decode password
+#			   update_vsftpd_conf	   modify /etc/vsftpd.conf key = value
+################################################################################
+
+################################################################################
+# global variables declare
+################################################################################
+# global variables for command execute, used by function: exec_cmd
+ERR_CODE=0
+ERR_MSG=""
+
+################################################################################
+# function: gen_prv_script
+# description:
+#	  generate script to authrity files
+# parameters:
+#			 component user home and script file name
+# output:
+#			 null
+# return:
+#			 0 succeed
+#			 1 fail
+################################################################################
+function gen_prv_script
+{
+	typeset chome="$1"
+	typeset authtemp="$2"
+	
+	typeset authtempsh="${authtemp}.sh"
+	
+	install_log DEBUG LIB "begin to generate script to authrity files in ${chome}."
+
+	grep "${chome}/ideploy/" "${authtemp}" > /dev/null 2>&1
+	if [ $? -ne 0 ]; then
+		# no x_authority.cfg file
+		install_log DEBUG LIB "there is no file named \"*_authority.cfg\" in ${chome}, no need to change the authority."
+		return 0
+	fi
+	
+	grep "${chome}/ideploy/" "${authtemp}" | xargs -n 1 -i cat '{}' | \
+		tr -d '\r' | sed '/^[ \t]*#/d' | sed '/^[ \t]*$/d' | \
+		awk -vchome="${chome}" '{
+		fmod = "";
+		if ( NF == 2 )
+		{
+			fmod = $2;
+		}
+		else
+		{
+			fmod = 600;
+		}
+		print "chmod -R " fmod " " chome "/" $1;
+		}' >> ${authtempsh}
+	
+	install_log DEBUG LIB "end to generate script to authority files in ${chome}."
+	install_log DEBUG LIB "files need to authority:\n$(cat ${authtempsh})"
+	return 0
+}
+################################################################################
+# function: custome_priv
+# description:
+#	  authority cfg file
+# parameters:
+#			 component user home
+# output:
+#			 null
+# return:
+#			 0 succeed
+#			 1 fail
+################################################################################
+function custome_priv
+{
+	typeset chome="$1"
+	
+	typeset authtemp="/tmp/auth.temp.$$"
+	typeset authtempsh="${authtemp}.sh"
+	typeset authlog="${chome}/ideploy/auth.log"
+	
+	touch ${authtempsh}; chmod u+x ${authtempsh}
+
+	find "${chome}" -maxdepth 5 -name "*_authority.cfg" | grep "/ideploy/[a-zA-Z0-9_.-]*/script/[a-zA-Z0-9_.-]*_authority.cfg" > ${authtemp}
+
+	if [ $(wc -l ${authtemp} | awk '{ print $1; }') -eq 0 ]; then
+		# no x_authority.cfg file
+		install_log DEBUG LIB "there is no file named \"*_authority.cfg\" in ${chome}, no need to change the authority."
+		rm -f ${authtemp} ${authtempsh}
+		return 0
+	fi
+	
+	# component install in ${HOME}
+	gen_prv_script "${chome}" ${authtemp}
+
+	# component install in ${HOME}/xxx/
+	typeset modlist=$(grep -v "${chome}/ideploy/" ${authtemp} | sed "s#${chome}/##g" | awk -F/ '{ print $1; }' | sort -u)
+	for mod in ${modlist}
+	do
+		gen_prv_script "${chome}/${mod}" ${authtemp}
+	done
+	
+	# execute generated script
+	${authtempsh} 1>${authlog} 2>/dev/null
+	#auth_log=$(cat ${authlog})
+	rm -rf ${authlog}
+	#if [ "x${auth_log}" != "x" ];then			
+	#	install_log WARN LIB "failed to change the authority, the failed message is \n${auth_log}."
+	#else
+	#	install_log DEBUG LIB "succeed to change the authority."
+	#fi
+	
+	rm -f ${authtemp} ${authtempsh}
+	
+	return 0
+}
+
+
+################################################################################
+# function:     get_uncompress_util
+# description:  get uncompress util for archive packages by package name.
+# parameters:
+#               $1 pkg name, postfix is gz/xz/tgz/txz
+# output:       gzip|xz
+# return:
+#			    null
+################################################################################
+function get_uncompress_util
+{
+	typeset pkg_name="$1"
+	typeset suffix=$(echo "${pkg_name}" | awk -F\. '{ print $NF; }')
+	if [ "x${suffix}" = "xgz" -o "x${suffix}" = "xtgz" ]; then
+		echo "gzip"
+	elif [ "x${suffix}" = "xxz" -o "x${suffix}" = "xtxz" ]; then
+		# *** because we will su to other user to execute uncompress, so the uncompress util use the absolute path 
+		echo "${IDEPLOY_PKG_PATH}/tools/xz/bin/xz"
+	else
+		# default gzip, when suffix is invalid
+		echo "gzip"
+	fi
+}
+
+################################################################################
+# function: authority_cfg
+# description:
+#	  authority cfg file
+# parameters:
+#			 config file name
+# output:
+#			 null
+# return:
+#			 0 succeed
+#			 1 fail
+################################################################################
+function authority_cfg
+{
+	typeset user_home="$1"
+	typeset conf_file="$2"
+	typeset conf_file_tmp=${conf_file}_$$
+	typeset	-i erro_flag=0
+	
+	if [ ! -f ${conf_file} ];then
+		install_log DEBUG LIB "the file ${conf_file} does not exist, no need to change the authority."
+		return 0
+	fi
+
+	awk '{if ($0~/^[ \t]*#/) {} else{if ($0~/^[ \t]*$/) {} else{print $0}}}' ${conf_file} >${conf_file_tmp}
+	
+	while read line
+	do
+		#judge wheather the field is 2 or not
+		line_field_num=$(echo ${line} | awk '{print NF}')
+		if [ ${line_field_num} -lt 2 ];then
+			install_log DEBUG LIB "the field number of \"${line}\" is less than two, please check the configuration in ${conf_file}."
+			((erro_flag=erro_flag+1))
+			continue;
+		fi
+		
+		file_name=$(echo ${line} | awk '{print $1}')
+		file_authority=$(echo ${line} | awk '{print $2}')
+
+		authority_file_path="${user_home}/${file_name}"
+		if [ ! -e ${authority_file_path} ];then
+			install_log ERROR LIB "${authority_file_path} does not exist, if you really needn't change its authority, please delete this config in ${conf_file}."
+			return 1
+		fi
+		
+		chmod ${file_authority} ${authority_file_path}
+		if [ $? -ne 0 ];then			
+			install_log ERROR LIB "failed to change the authority of ${authority_file_path} to ${file_authority}."
+			((erro_flag=erro_flag+1))
+		else
+			install_log DEBUG LIB "end to change the authority of ${authority_file_path} to ${file_authority}."
+		fi
+	done < ${conf_file_tmp}
+	
+	if [ ${erro_flag} -ne 0 ];then
+		return 1
+	fi
+}
+
+################################################################################
+# function: decodePwd
+# description:
+#	  decode password
+# parameters:
+#			 password
+# output:
+#			 null
+# return:
+#			 0 succeed
+#			 1 fail
+################################################################################
+function decodePwd
+{
+	typeset func_name="decodePwd"
+    if [ $# -ne 1 ]; then
+        install_log ERROR LIB "The parameter number error,required 1 parameter."
+		return 1
+    fi
+	typeset decode_path="${IDEPLOY_PKG_PATH}/script"
+    RETURN[0]=""
+    typeset message=$1
+
+    typeset decryptor="aes128_suse"
+
+    if [ ! -f "${decode_path}/${decryptor}" ];then
+		install_log ERROR LIB "ecrypt executable file ${decode_path}/${decryptor} doesn't exist."
+        return 1
+    fi
+
+    if [ ! -x "${decode_path}/${decryptor}" ];then
+		install_log DEBUG LIB "decrypt executable file ${decode_path}/${decryptor} is not executable."
+        chmod +x "${decode_path}/${decryptor}"
+        if [ $? -ne 0 ];then
+			install_log DEBUG LIB "add executable right for file ${decode_path}/${decryptor} failed."
+            return 1
+        fi
+    fi
+
+	typeset temp_file=${decode_path}/tmpdecode.log
+    "${decode_path}/${decryptor}" "decode" "0" "${message}" > "${temp_file}"
+
+    if [ $? -ne 0 ];then
+		install_log ERROR LIB "${func_name}" "decrypt input string failed, please make sure input is a valid code."
+        rm -f "${temp_file}"
+        return 1
+    fi
+
+    RETURN[0]=`cat ${temp_file}`
+    rm -f "${temp_file}"
+    return 0
+}
+################################################################################
+# function: set_userdb_range
+# description:
+#	  slcc and sis comp need this function.
+# parameters:
+#			 null
+# output:
+#			 userdb[0],dbrange,cbedb
+# return:
+#			 0 succeed
+#			 1 fail
+################################################################################
+function set_userdb_range
+{
+	read_value "sis_pmp_cbe_ip.size"
+	if [ $? -ne 0 ];then
+		install_log DEBUG LIB "get sis_pmp_cbe_ip.size value failed"
+		return 1
+	fi
+	cbe_size="${RETURN[0]}"
+	
+	#userdb size must < cbe_size
+	t_divide_data=$(expr 600 / ${cbe_size})
+	t_residual=$(expr 600 % ${cbe_size})
+
+	tmp_index=0
+	tmp_num2=$(expr $cbe_size - 1)
+	while [ $tmp_index -lt $cbe_size ]
+	do
+		tmp_num=$(expr ${tmp_index} + 1)
+		tmp_before=$(expr ${t_divide_data} \* ${tmp_index})
+		tmp_after=$(expr ${t_divide_data} \* $tmp_num - 1)
+		
+		if [ $tmp_index -eq $tmp_num2 -a $t_residual -ne 0 ]; then
+			RETURN[$tmp_index]="$tmp_before-599"
+		else
+			RETURN[$tmp_index]="$tmp_before-$tmp_after"
+		fi
+		
+		((tmp_index=tmp_index+1))
+	done
+
+	RETNUM=$cbe_size
+}
+################################################################################
+# function: update_cfg_value
+# description:
+#	  update value in config file like properties file.
+# parameters:
+#			 cfg_file_name	config file name.
+#			 key			which key you will update.
+#			 value			value.
+# output:
+#			 null
+# return:
+#			 0 succeed
+#			 1 fail
+################################################################################
+function update_cfg_value
+{
+	typeset cfg_file="$1"
+	typeset key_name="$2"
+	typeset value="$3"
+	
+	if [ ! -r ${cfg_file} ]; then
+		touch ${cfg_file} 2>/dev/null
+		if [ $? -ne 0 ]; then
+			return 1
+		fi
+	fi
+	if [ ! -w ${cfg_file} ]; then
+		return 1
+	fi
+	
+	typeset mc=`grep -c "^[ 	]*${key_name}[ 	]*=" ${cfg_file}`
+	
+	if [ ${mc} -eq 0 ]; then
+		echo "${key_name}=${value}" >> ${cfg_file} 2>/dev/null
+		if [ $? -ne 0 ]; then
+			return 1
+		fi
+	elif [ ${mc} -eq 1 ]; then
+		typeset old_line=`grep "^[ 	]*${key_name}[ 	]*=" ${cfg_file}`
+		typeset new_line="${key_name}=${value}"
+		sed "s#^${old_line}#${new_line}#g" ${cfg_file} > /tmp/proc_$$_update_cfg_value.tmp 2>/dev/null
+		if [ $? -ne 0 ]; then
+			rm -f "/tmp/proc_$$_update_cfg_value.tmp"
+			return 1
+		fi
+		mv -f /tmp/proc_$$_update_cfg_value.tmp ${cfg_file} 2>/dev/null
+		if [ $? -ne 0 ]; then
+			rm -f "/tmp/proc_$$_update_cfg_value.tmp"
+			return 1
+		fi
+	else
+		# match lines than 1, properties file format error
+		return 1
+	fi
+	
+	return 0
+}
+
+################################################################################
+# name	  : read_xml_tag
+# describe: read_xml_tag <filename> <node>
+# input	  : <filename> <node>
+# output  : value of this tag
+# rerurn  : 0:success
+#			1:failed
+################################################################################
+function read_xml_tag
+{
+	#check the number of the parameter
+	if [ $# -ne 2 ];then
+	   install_log DEBUG LIB "Failed to read configuration.The parameter number is error."
+	   return 1
+	fi
+	
+	typeset source_file=$1
+	typeset node=$2
+	
+	typeset read_xml="perl -I${IDEPLOY_PKG_PATH}/tools ${IDEPLOY_PKG_PATH}/script/read_xml.pl"
+	
+	RETURN[0]=""
+	RETURN[0]=`${read_xml} ${source_file} ${node}` 2>/dev/null
+	if [ $? -ne 0 ] ; then 
+	   install_log DEBUG LIB "Failed to read configuration. The filename is $1;The path of xml tag is $2."
+	   return 1
+	fi
+	
+	return 0
+}
+
+################################################################################
+# name	  : update_xml_tag
+# describe: update_xml_tag <filename> <node> <value>
+# input	  : <filename> <node> <value>
+# output  : null
+# rerurn  : 0:success
+#			1:failed
+################################################################################
+function update_xml_tag
+{
+	#check the number of the parameter
+	if [ $# -ne 3 ];then
+	   install_log DEBUG LIB "Failed to modify configuration.The parameter number is error."
+	   return 1
+	fi
+	
+	typeset update_file=$1
+	typeset node=$2
+	typeset value=$3	
+	
+	typeset write_xml="perl -I${IDEPLOY_PKG_PATH}/tools ${IDEPLOY_PKG_PATH}/script/write_xml.pl"
+	
+	${write_xml} ${update_file} ${node} ${value} >/dev/null 2>/dev/null
+	if [ $? -ne 0 ] ; then 
+	   install_log DEBUG LIB "Failed to update configuration. The filename is $1;The path of xml tag is $2; the new value is $3 ."
+	   return 1
+	fi
+	
+	return 0
+}
+
+################################################################################
+# name	  : read_xml_tag_spec
+# describe: read_xml_tag_spec <filename> <nodetree> [<keystring>|<attrname> <keyattrstring>]
+# input	  : <filename> <nodetree> [<keystring>|<attrname> <keyattrstring>]
+# output  : value of tag or value of the attribute
+# rerurn  : 0:success
+#			1:failed
+################################################################################
+function read_xml_tag_spec
+{
+	#check the number of the parameter
+	if [ $# -ne 3 -a $# -ne 4 ];then
+	   install_log DEBUG LIB "Failed to read configuration.The parameter number is error."
+	   return 1
+	fi
+	
+	typeset source_file=$1
+	typeset node=$2
+	typeset read_spec_xml="perl -I${IDEPLOY_PKG_PATH}/tools ${IDEPLOY_PKG_PATH}/script/read_spec_xml.pl"
+	RETURN[0]=""
+	
+	if [ $# -eq 3 ]; then
+		typeset keystring=$3
+		RETURN[0]=`${read_spec_xml} ${source_file} ${node} ${keystring}` 2>/dev/null
+		if [ $? -ne 0 ] ; then 
+			install_log DEBUG LIB "Failed to read configuration. The filename is $1;The path of xml tag is $2;The keystring is $3."
+			return 1
+		fi
+	else
+		typeset attrname=$3
+		typeset keyattrstring=$4
+		RETURN[0]=`${read_spec_xml} ${source_file} ${node} ${attrname} ${keyattrstring}` 2>/dev/null
+		if [ $? -ne 0 ] ; then 
+			install_log DEBUG LIB "Failed to read configuration. The filename is $1;The path of xml tag is $2;The attrname is $3; The keyattrstring is $4."
+			return 1
+		fi
+	fi
+	
+	return 0
+}
+
+################################################################################
+# name	  : update_xml_tag_spec
+# describe: update_xml_tag_spec <filename> <nodetree> [<keystring>|<attrname> <keyattrstring>] <value>
+# input	  : <filename> <nodetree> [<keystring>|<attrname> <keyattrstring>] <value>
+# output  : null
+# rerurn  : 0:success
+#			1:failed
+################################################################################
+function update_xml_tag_spec
+{
+	#check the number of the parameter
+	if [ $# -ne 4 -a $# -ne 5 ];then
+	   install_log DEBUG LIB "Failed to modify configuration.The parameter number is error."
+	   return 1
+	fi
+	
+	typeset update_file=$1
+	typeset node=$2
+	typeset write_spec_xml="perl -I${IDEPLOY_PKG_PATH}/tools ${IDEPLOY_PKG_PATH}/script/write_spec_xml.pl"
+
+	if [ $# -eq 4 ]; then	 
+		typeset keystring=$3
+		typeset value=$4
+		${write_spec_xml} ${update_file} ${node} ${keystring} ${value} >/dev/null 2>/dev/null
+		if [ $? -ne 0 ] ; then 
+		   install_log DEBUG LIB "Failed to update configuration. The filename is $1;The path of xml tag is $2; the keystring is $3; the new value is $4 ."
+		   return 1
+		fi
+	else
+		typeset attrname=$3
+		typeset keyattrstring=$4
+		typeset value=$5
+		${write_spec_xml} ${update_file} ${node} ${attrname} ${keyattrstring} ${value} >/dev/null 2>/dev/null
+		if [ $? -ne 0 ] ; then 
+		   install_log DEBUG LIB "Failed to update configuration. The filename is $1;The path of xml tag is $2; the attrname is $3; the keyattrstring is $4; the new value is $5 ."
+		   return 1
+		fi
+	fi
+	
+	return 0
+}
+
+################################################################################
+# name	  : port_is_available
+# describe: check the port which will be used is available or not.
+# parameter list: 
+#			para1:port
+# output  : 0:success
+#			1:failed. The port is exit.
+################################################################################
+function port_is_available
+{
+	typeset port=$1
+	is_integer2 ${port}
+	if [ $? -ne 0 ]; then
+		install_log DEBUG "COMMONLIB" "Parameters error, need a port."
+		return 1
+	fi
+	
+	inuse=`netstat -an | awk '{ print $4; }' | awk -F: '{ if (NF > 1 && $NF ~ /^[0-9]+$/) { print $NF; } }' | grep -w "${port}"`
+	if [ "X${inuse}" != "X" ]; then
+		lsof -i:${port} | grep "evmlogger" >/dev/null
+		if [ $? -eq 0 ];then
+			install_log DEBUG "COMMONLIB" "Port ${port} is used by evmlogger."
+			typeset evmloggerPid=$(lsof -i:${port} | grep "evmlogger" | awk '{print $2}')
+			kill -9 ${evmloggerPid}
+			return 0
+		fi
+		return 1
+	fi
+
+	return 0
+}
+
+################################################################################
+# name	  : get_free_ports
+# describe: get free ports not used in system and not used in current install
+#			task. 
+# parameter list: 
+#			num					   ports number, optional, default 1
+# output  :
+#			RETURN[0]...RETURN[num-1]
+# return  : 0:success
+#			1:failed
+################################################################################
+function get_free_ports
+{
+	if [ $# -gt 1 ]; then
+		install_log DEBUG "COMMONLIB" "Parameters count error, need: [num]."
+		return 1
+	fi
+	
+	RETURN[0]=""
+	
+	# verify parameters
+	typeset port_num="1"
+	if [ $# -eq 1 ]; then
+		port_num="$1"
+		is_integer2 "${port_num}"
+		if [ $? -ne 0 ]; then
+			install_log DEBUG "COMMONLIB" "The ${port_num} is used in system or used in current install.It's not available."
+			return 1
+		fi
+	else
+		port_num="1"
+	fi
+	
+	############################################################################
+	# resolve simultaneity error in logical dualHost.
+	get_local_ne_list
+	if [ $? -ne 0 ]; then
+		install_log DEBUG COMMONLIB "Getting local ne list failed."
+	fi
+	typeset first_ne="${RETURN[0]}"
+	read_value "_selectedNETypeList"
+	if [ $? -ne 0 ];then
+		install_log DEBUG COMMONLIB "Getting _selectedNETypeList failed"
+		return 1 
+	fi
+	#get_ne_index_in_localmachine "${first_ne}"
+	#if [ $? -ne 0 ]; then
+	#	install_log DEBUG COMMONLIB "Getting index of ne: ${first_ne} in physical machine failed."
+	#	return 1
+	#fi
+	typeset ne_list="${RETURN[0]}"
+	
+	typeset ne_idx=0
+	ne_idx=$(echo ${ne_list} | awk -F, -vne_name=${first_ne} '{ for (i = 1; i <= NF; i++) if ($i == ne_name) print i-1}')
+	
+	# get max port number last check, default 5001
+	typeset base_port=5000
+	# yinjiajun modify 2013-05-15: ensure free port in range [5000, 6500]
+	typeset last_max_port=$(echo 'x' | awk -vbase_port=${base_port} -vne_idx=${ne_idx} '{ print base_port + ne_idx*200; }')
+	############################################################################
+	typeset port_status_file="${TMP}/port.list.status"
+	typeset port_list_file="${TMP}/ports.list"
+	if [ -f "${port_status_file}" ]; then
+		last_max_port_tmp="`cat ${port_status_file}`"
+		if [ "X${last_max_port_tmp}" != "X" ]; then
+			last_max_port="${last_max_port_tmp}"
+		fi
+		
+		is_integer2 "${last_max_port}"
+		if [ $? -ne 0 ]; then
+			install_log DEBUG "COMMONLIB" "The status file: ${port_status_file} is broken."
+			return 1
+		fi
+	else
+		touch "${port_status_file}"
+		chmod 666 "${port_status_file}"
+	fi
+	
+	# ports list used in system now, get one time and cached it
+	typeset ports_list="`netstat -an | awk '{ print $4; }' | awk -F: '{ if (NF > 1 && $NF ~ /^[0-9]+$/) { print $NF; } }' | sort -n -u`"
+	
+	# verify whether port is available
+	typeset idx=0
+	typeset in_use=""
+	while [ ${idx} -lt ${port_num} ]
+	do
+		while [ true ]
+		do
+			# circle the port number if exceed 65535
+			if [ ${last_max_port} -gt 65535 ]; then
+				last_max_port=${base_port}
+			fi
+		
+			in_use=`grep -w "${last_max_port}" "${port_list_file}"`
+			if [ "X${in_use}" = "X" ]; then
+				typeset in_use=`echo "${ports_list}" | grep -w "${last_max_port}"`
+				if [ "X${in_use}" = "X" ]; then
+					RETURN[${idx}]="${last_max_port}"
+					echo "${last_max_port}" >> "${port_list_file}"
+					((last_max_port=last_max_port+1))
+					break
+				fi
+			fi
+			
+			((last_max_port=last_max_port+1))
+		done
+		
+		((idx=idx+1))
+	done
+	
+	# write last_max_port to status file: port.list.status
+	echo "${last_max_port}" > "${port_status_file}"
+	
+	return 0
+}
+
+################################################################################
+# name	  : is_integer2
+# describe: check a string whether it is an positive integer or not.
+# parameter list: 
+#			str			string to check.
+# output  :
+#			RETURN[0]...RETURN[num-1]
+# return  : 0:success
+#			1:failed
+################################################################################
+function is_integer2
+{
+	if [ $# -ne 1 ]; then
+		install_log DEBUG "COMMONLIB" "Parameters count error, need: str."
+		return 1
+	fi
+	typeset str="$1"
+
+	# max integer: 2147483648
+	typeset int_val=`echo "${str}" | awk '{ if($0~/^[0-9]+$/ && $0 >= 0 && $0 < 2147483648) print $0; }'`
+	if [ "X${int_val}" = "X" ]; then
+		return 1
+	fi
+
+	return 0
+}
+
+################################################################################
+# name	  : set_progress_range
+# describe: set component install progress range.
+# parameter list: 
+#			para1: min_rate	   [0,100)
+#			para2: max_rate	   (0,100]
+# output  : null
+# return  : 0:success
+#			1:failed
+################################################################################
+function set_progress_range
+{
+	typeset rate_min=`echo "$1" | awk '{ if($0~/^[0-9]+$/ && $0 >= 0 && $0 <= 100) print $0; }'`
+	typeset rate_max=`echo "$2" | awk '{ if($0~/^[0-9]+$/ && $0 >= 0 && $0 <= 100) print $0; }'`
+	
+	if [ "X${rate_min}" = "X" -o "X${rate_max}" = "X" ]; then
+		install_log DEBUG LIB "Parameters error, need: [rate_min, rate_max]."
+		return 1
+	fi
+	
+	if [ ${rate_min} -gt ${rate_max} ]; then
+		install_log DEBUG LIB "Parameters error, [rate_min] should less than [rate_max]."
+		return 1
+	fi
+	
+	PROGRESS_MIN=${rate_min}
+	PROGRESS_MAX=${rate_max}
+	
+	return 0
+}
+
+################################################################################
+# name	  : install_progress
+# describe: output install progress in ideploy web page.
+# parameter list: 
+#			para1: rate	   range[0,100]
+# output  : null
+# return  : 0:success
+#			1:failed
+################################################################################
+function install_progress
+{
+	typeset rate=`echo "$1" | awk '{ if($0~/^[0-9]+$/ && $0 >= 0 && $0 <= 100) print $0; }'`
+	if [ "X${rate}" = "X" ]; then
+		install_log DEBUG LIB "Parameters error, need [rate]."
+		return 1
+	fi
+	
+	if [ ${rate} -eq 0 ]; then
+		log_echo rate ${PROGRESS_MIN}
+		return 0
+	fi
+	
+	if [ ${rate} -eq 100 ]; then
+		log_echo rate ${PROGRESS_MAX}
+		return 0
+	fi
+	
+	typeset g_rate=`echo "${rate}" | awk -vmin=${PROGRESS_MIN} -vmax=${PROGRESS_MAX} '{ print min + int((max-min)*($0+1)/100) }'`
+	log_echo rate ${g_rate}
+	
+	return 0
+}
+
+################################################################################
+# name	  : env_init_cmd
+# describe: generate a command list to initialize component shell environment.
+# parameter list: 
+#			shell			 shell name and path of component run user.
+# output  : shell command list, separate by semicolon
+# return  : 0:success
+#			1:failed
+################################################################################
+function env_init_cmd
+{
+	if [ $# -ne 1 ]; then
+		install_log DEBUG LIB "Generate command list to initialize component shell environment failed."
+		echo "ls"
+		return 1
+	fi
+	typeset comp_dir="$1"
+	touch "${comp_dir}/pub.inc"
+	chmod 777 "${comp_dir}/pub.inc"
+	echo "#!/usr/bin/ksh" > "${comp_dir}/pub.inc"
+	echo "INSTALL_TASK_DIR=\"${INSTALL_TASK_DIR}\" " >> "${comp_dir}/pub.inc"
+	echo "PROGRESS_MIN=${PROGRESS_MIN}" >> "${comp_dir}/pub.inc"
+	echo "PROGRESS_MAX=${PROGRESS_MAX}" >> "${comp_dir}/pub.inc"
+	echo ". ${INSTALL_TASK_DIR}/script/commonlib.inc" >> "${comp_dir}/pub.inc"
+	return 0
+}
+
+################################################################################
+# function: run_vcs_cmd
+# description:
+#	  run a vcs command, if the vcs config is not rw, modify it to rw.
+# parameters:
+#			 null
+# output:
+#			 null
+# return:
+#			 0 succeed
+#			 1 fail
+################################################################################
+function run_vcs_cmd
+{
+	if [ $# -ne 1 ]
+	then 
+		install_log "ERROR" "LIB" "The number of parameters error, it requres only one parameter!"
+		return 1
+	fi
+	
+	typeset cmd="${1}"
+	typeset flagfile="/etc/VRTSvcs/conf/config/.stale"
+	typeset errfile="${TMP}/vcs_cmd_$$.tmp"
+	if [ ! -f "$flagfile" ];then
+		/opt/VRTSvcs/bin/haconf -makerw 1>"${errfile}" 2>"${errfile}"
+		typeset rt=$?
+		grep "Cluster already writable" "${errfile}" > /dev/null 2>&1
+		typeset isrw=$?
+		typeset errInfo=$(cat "${errfile}")
+		rm -f "${errfile}"
+		if [ ${rt} -ne 0 -a ${isrw} -ne 0 ]
+		then
+			echo "${errInfo}"|grep "Cluster already writable" 1>/dev/null 2>&1
+			if [ $? -ne 0 ]
+			then 
+				install_log DEBUG LIB "Executing vcs command: haconf -makerw failed, err info: ${errInfo}."
+				return 1
+			fi
+		fi
+	fi
+	
+	typeset idx=0
+	while [ ${idx} -lt 10 ]
+	do
+		((idx=idx+1))
+		eval "$cmd"	 1>"${errfile}" 2>&1
+		typeset rt=$?
+		typeset errInfo=$(cat ${errfile})
+		rm -f "${errfile}"
+		if [ ${rt} -eq 0 ]
+		then
+			return 0 
+		fi 
+		
+		echo ${errInfo}|grep "must be ReadWrite" 1>/dev/null 2>&1
+		if [ $? -ne 0 ]
+		then 
+			install_log "DEBUG" "LIB" "Executing vcs command: ${cmd} failed, error info: ${errInfo}" 
+		else
+			sleep 1
+			/opt/VRTSvcs/bin/haconf -makerw 1>"${errfile}" 2>"${errfile}"
+			typeset rt=$?
+			typeset errInfo=$(cat "${errfile}")
+			rm -f "${errfile}"
+
+			if [ ${rt} -ne 0 ]
+			then
+				echo "${errInfo}"|grep "Cluster already writable" 1>/dev/null 2>&1
+				if [ $? -ne 0 ]
+				then 
+					install_log DEBUG LIB "Executing vcs command: haconf -makerw failed, err info: ${errInfo}."
+					return 1
+				fi
+			fi
+		fi
+		sleep 1
+	done 
+	if [ $idx -ge 10 ];then
+		install_log "ERROR" "LIB" "Executing vcs command: ${cmd} failed, error info: ${errInfo}"
+		return 1
+	fi
+}
+
+################################################################################
+# function: run_hacs_cmd
+# description:
+#	  run a hacs command.
+# parameters:
+#			 null
+# output:
+#			 null
+# return:
+#			 0 succeed
+#			 1 fail
+################################################################################
+function run_hacs_cmd
+{
+	if [ $# -ne 1 ]
+	then 
+		install_log "ERROR" "LIB" "The number of parameters error, it requres only one parameter!"
+		return 1
+	fi
+	
+	typeset cmd="${1}"
+	typeset errfile="/tmp/hacs_cmd_$$.tmp"
+	typeset idx=0
+	while [ ${idx} -lt 10 ]
+	do
+		((idx=idx+1))
+		eval "$cmd"	 1>"${errfile}" 2>&1
+		typeset rt=$?
+		typeset errInfo=$(cat ${errfile})
+		error_flag=$(grep -i "error" ${errfile} | wc -l)
+		rm -f "${errfile}"
+		if [ ${error_flag} -ne 0 ];then
+			install_log "ERROR" "LIB" "Executing hacs command: ${cmd} failed, error info: ${errInfo}"
+			return 1
+		fi
+		
+		if [ ${rt} -eq 0 ]
+		then
+			return 0 
+		fi 
+		
+		sleep 1
+	done 
+	if [ $idx -ge 10 ];then
+		install_log "ERROR" "LIB" "Executing hacs command: ${cmd} failed, error info: ${errInfo}"
+		return 1
+	fi
+}
+
+################################################################################
+# function name: exec_cmd
+# description  : execute specified command, store return code and stdout/stderr.
+# note		   :
+#				 (1)not support i/o redirection
+#				 (2)not support combined command
+# parameters   :
+#				 $* command and parameters
+# input		   : null
+# output	   :
+#				 ERR_CODE	return code of this command
+#				 ERR_MSG	stdout/stderr of this command
+# return	   :
+#				 $? return code of this command
+################################################################################
+function exec_cmd
+{
+	install_log DEBUG LIB "Calling function exec_cmd, parameters: [$*]."
+	
+	# verify params
+	typeset cmd=$(echo "$*" | sed -e 's/^[ \t]*//g;s/[ \t]*$//g')
+	if [ "x${cmd}" = x ]; then
+		ERR_MSG="Command is empty."
+		return 1
+	fi
+	
+	# parse cmd and params
+	cmd=""
+	typeset param_count=$#
+	while [ ${param_count} -gt 0 ]
+	do
+			if [ "x${cmd}" = "x" ]; then
+				cmd="$1"
+			else
+				cmd="${cmd} \"$1\""
+			fi
+			
+			shift
+			((param_count=param_count-1))
+	done
+	
+	# execute cmd
+	typeset tmpfile="${TMP}/exec_cmd_$$.tmp"
+
+	eval "${cmd}" > ${tmpfile} 2>&1
+	ERR_CODE=$?
+	ERR_MSG=$(cat ${tmpfile})
+	rm -f ${tmpfile}
+	install_log DEBUG LIB "Command return: ${ERR_CODE}, output: [${ERR_MSG}]."
+	
+	return ${ERR_CODE}
+}
+
+################################################################################
+# function: check_process
+# description:
+#	  check process
+# parameters:
+#			 1 comp_user_name
+# output:
+#			 null
+# return:
+#			 0 succeed
+#			 1 fail
+################################################################################
+function check_process
+{
+	if [ $# -ne 1 ]
+	then 
+		install_log "ERROR" "LIB" "The number of parameters error, it requres only one parameter!"
+		return 1
+	fi
+	
+	typeset comp_user_name="${1}"
+	
+	#check process
+	typeset check_num=0
+
+	while [ ${check_num} le 2 ]
+	do
+		typeset is_comp_run=`ps -fu ${comp_user_name} | wc -l | sed 's/[ \t]//g'`
+		if [ ${is_comp_run} -ge 2 ]; then
+			
+			if [ ${check_num} le 2 ]; then
+				sleep 2
+				((check_num+=1))
+				continue
+			else
+				return 1
+			fi
+		else
+			break
+		fi
+	done
+	
+	return 0
+	
+}
+
+################################################################################
+# function: get_bcast_mask
+# description:
+#	  get_bcast_mask
+# parameters:
+#			 null
+# output:
+#			 net mask
+# return:
+#			 0 succeed
+#			 1 fail
+################################################################################
+function get_bcast_mask
+{
+	get_nic_name
+	if [ $? -ne 0 ]
+	then
+		install_log ERROR LIB "Getting base nic name failed."
+		return 1
+	fi
+	typeset fabric_nic_name="${RETURN[0]}"
+
+	typeset fabric_bcast_mask=""
+	
+	nic_num=$(ifconfig | sed -n "/${fabric_nic_name} /=")
+	fabric_bcast_mask=$(ifconfig | sed -n "${nic_num},/Bcast/p" | grep "Bcast" | awk '{print $3}'|awk -F: '{print $2}')
+	if [ $? -ne 0 ]
+	then
+		install_log ERROR LIB "Getting the fabric bcast failed."
+		return 1
+	else
+		install_log DEBUG LIB "the base nic ${fabric_nic_name} bcast is ${fabric_bcast_mask}."
+	fi
+	
+	RETURN[0]="${fabric_bcast_mask}"
+	return 0
+}
+
+################################################################################
+# function: get_fabric_subnetmask
+# description:
+#	  get_fabric_subnetmask
+# parameters:
+#			 null
+# output:
+#			 service_subnet_mask
+# return:
+#			 0 succeed
+#			 1 fail
+################################################################################
+function get_fabric_subnetmask
+{
+	get_nic_name
+	if [ $? -ne 0 ]
+	then
+		install_log ERROR LIB "Getting base nic name failed."
+		return 1
+	fi
+	typeset fabric_nic_name="${RETURN[0]}"
+
+	typeset fabric_subnet_mask=""
+	
+	nic_num=$(ifconfig | sed -n "/${fabric_nic_name} /=")
+	fabric_subnet_mask=$(ifconfig | sed -n "${nic_num},/Bcast/p" | grep "Bcast" | awk '{print $4}'|awk -F: '{print $2}')
+	if [ $? -ne 0 ]
+	then
+		install_log ERROR LIB "Getting the fabric subnetmask failed."
+		return 1
+	else
+		install_log DEBUG LIB "the base nic ${fabric_nic_name} subnetmask is ${fabric_subnet_mask}."
+	fi
+	
+	RETURN[0]="${fabric_subnet_mask}"
+	return 0
+}
+
+################################################################################
+# function: get_base_bcast_mask
+# description:
+#	  get_base_bcast_mask
+# parameters:
+#			 null
+# output:
+#			 net mask
+# return:
+#			 0 succeed
+#			 1 fail
+################################################################################
+function get_base_bcast_mask
+{
+	get_base_nic_name
+	if [ $? -ne 0 ]
+	then
+		install_log ERROR LIB "Getting base nic name failed."
+		return 1
+	fi
+	typeset base_nic_name="${RETURN[0]}"
+	
+	typeset base_bcast_mask=""
+	
+	nic_num=$(ifconfig | sed -n "/${base_nic_name} /=")
+	base_bcast_mask=$(ifconfig | sed -n "${nic_num},/Bcast/p" | grep "Bcast" | awk '{print $3}'|awk -F: '{print $2}')
+	if [ $? -ne 0 ]
+	then
+		install_log ERROR LIB "Getting the base bcast failed."
+		return 1
+	else
+		install_log DEBUG LIB "the base nic ${base_nic_name} bcast is ${base_bcast_mask}."
+	fi
+	
+	RETURN[0]="${base_bcast_mask}"
+	return 0
+}
+
+################################################################################
+# function: get_base_subnetmask
+# description:
+#	  get_base_subnetmask
+# parameters:
+#			 null
+# output:
+#			 base_subnet_mask
+# return:
+#			 0 succeed
+#			 1 fail
+################################################################################
+function get_base_subnetmask
+{
+	get_base_nic_name
+	if [ $? -ne 0 ]
+	then
+		install_log ERROR LIB "Getting base nic name failed."
+		return 1
+	fi
+	typeset base_nic_name="${RETURN[0]}"
+	
+	typeset base_subnet_mask=""
+	
+	nic_num=$(ifconfig | sed -n "/${base_nic_name} /=")
+	base_subnet_mask=$(ifconfig | sed -n "${nic_num},/Bcast/p" | grep "Bcast" | awk '{print $4}'|awk -F: '{print $2}')
+	if [ $? -ne 0 ]
+	then
+		install_log ERROR LIB "Getting the base subnetmask failed."
+		return 1
+	else
+		install_log DEBUG LIB "the base nic ${base_nic_name} subnetmask is ${base_subnet_mask}."
+	fi
+	
+	RETURN[0]="${base_subnet_mask}"
+	return 0
+}
+
+
+################################################################################
+# function: get_back_bcast_mask
+# description:
+#	  get_back_bcast_mask
+# parameters:
+#			 null
+# output:
+#			 net mask
+# return:
+#			 0 succeed
+#			 1 fail
+################################################################################
+function get_back_bcast_mask
+{
+	get_back_nic_name
+	if [ $? -ne 0 ]
+	then
+		install_log ERROR LIB "Getting back nic name failed."
+		return 1
+	fi
+	typeset back_nic_name="${RETURN[0]}"
+	
+	typeset back_bcast_mask=""
+	
+	nic_num=$(ifconfig | sed -n "/${back_nic_name} /=")
+	back_bcast_mask=$(ifconfig | sed -n "${nic_num},/Bcast/p" | grep "Bcast" | awk '{print $3}'|awk -F: '{print $2}')
+	if [ $? -ne 0 ]
+	then
+		install_log ERROR LIB "Getting the back bcast failed."
+		return 1
+	else
+		install_log DEBUG LIB "the back nic bcast ${back_nic_name} is ${back_bcast_mask}."
+	fi
+	
+	RETURN[0]="${back_bcast_mask}"
+	return 0
+}
+
+
+################################################################################
+# function: get_back_subnet_mask
+# description:
+#	  get_back_subnet_mask
+# parameters:
+#			 null
+# output:
+#			 back_subnet_mask
+# return:
+#			 0 succeed
+#			 1 fail
+################################################################################
+function get_back_subnet_mask
+{
+	get_back_nic_name
+	if [ $? -ne 0 ]
+	then
+		install_log ERROR LIB "Getting back nic name failed."
+		return 1
+	fi
+	typeset back_nic_name="${RETURN[0]}"
+	
+	typeset back_subnet_mask=""
+	
+	nic_num=$(ifconfig | sed -n "/${back_nic_name} /=")
+	back_subnet_mask=$(ifconfig | sed -n "${nic_num},/Bcast/p" | grep "Bcast" | awk '{print $4}'|awk -F: '{print $2}')
+	if [ $? -ne 0 ]
+	then
+		install_log ERROR LIB "Getting the back subnetmask failed."
+		return 1
+	else
+		install_log DEBUG LIB "the back nic ${back_nic_name} subnetmask is ${back_subnet_mask}."
+	fi
+	
+	RETURN[0]="${back_subnet_mask}"
+	return 0
+}
+
+
+################################################################################
+# function: get_base_nic_name
+# description:
+#	  get_base_nic_name
+# parameters:
+#			 null
+# output:
+#			 net mask
+# return:
+#			 0 succeed
+#			 1 fail
+################################################################################
+function get_base_nic_name
+{
+	RETURN[0]=""
+	read_value "base_network_card"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting value of base_network_card failed."
+		return 1
+	fi
+	
+	return 0
+}
+
+################################################################################
+# function: get_back_nic_name
+# description:
+#	  get_back_nic_name
+# parameters:
+#			 null
+# output:
+#			 net mask
+# return:
+#			 0 succeed
+#			 1 fail
+################################################################################
+function get_back_nic_name
+{
+	RETURN[0]=""
+	read_value "back_network_card"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting value of back_network_card failed."
+		return 1
+	fi
+	
+	return 0
+}
+
+################################################################################
+# function: get_nic_name
+# description:
+#	  get_nic_name
+# parameters:
+#			 null
+# output:
+#			 net mask
+# return:
+#			 0 succeed
+#			 1 fail
+################################################################################
+function get_nic_name
+{
+	RETURN[0]=""
+	
+	read_value "service_network_card"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting value of service_network_card failed."
+		return 1
+	fi
+	typeset nic_name=${RETURN[0]}
+	
+	RETURN[0]=${nic_name}
+	return 0
+}
+
+################################################################################
+# function: rpm_install
+# description:
+#	  install rpm package.
+# parameters:
+#			 rpm package name.
+# output:
+#
+# return:
+#			 0 succeed
+#			 1 fail
+################################################################################
+function rpm_install
+{
+	if [ $# -ne 1 ]
+	then 
+		install_log "ERROR" "LIB" "There must be only one  parameter, means rpm name."
+		return 1 
+	fi
+	
+	typeset rpm_name="${1}"
+	typeset base_rpm_name=$(basename ${rpm_name})
+
+	typeset rpm_install_log="${TMP}_install_rpm_$$.log"
+	typeset rpm_install_info=""
+	
+	typeset rpm_version=$(echo ${base_rpm_name}|sed 's/\.src.*//;s/\.x86.64.*//')
+	
+	typeset idx=0
+	while [ idx -lt 10 ]
+	do
+		((idx=idx+1))
+		rpm -q ${rpm_version} 1>"${rpm_install_log}" 2>&1
+		typeset rt=$?
+		rpm_install_info=$(cat ${rpm_install_log})
+		rm -f "${rpm_install_log}"
+		if [ $rt -eq 0 ]
+		then
+			install_log INFO LIB "The rpm package \"${rpm_name}\" has been installed."
+			return 0
+		else 
+			install_log INFO LIB "The rpm package \"${rpm_name}\" has not been installed. The debug log is ${rpm_install_info}"
+		fi
+		
+		#something depended for "glibc-debuginfo-2.4-31.77.83.x86_64.rpm" is wrong 
+		#error just like "Failed dependencies: glibc = 2.4-31.77.83 is needed by glibc-debuginfo-2.4-31.77.83.x86_64"
+		typeset judge_flag=$(echo ${base_rpm_name} |grep "glibc-debuginfo-2.4-31.77.83.x86_64.rpm" |wc -l)
+		if [ ${judge_flag} -eq 1 ];then
+			install_log INFO LIB "The rpm package \"${base_rpm_name}\" needn't to be installed."
+			return 0
+		fi
+		
+		rpm -Uvh "${rpm_name}" 1>"${rpm_install_log}" 2>&1 
+		typeset rt=$?
+		typeset rpm_install_info=$(cat ${rpm_install_log})
+		rm -f "${rpm_install_log}"
+		if [ $rt -ne 0 ];then
+			echo "${rpm_install_info}"|grep "already installed" >/dev/null
+			if [ $? -eq 0 ];then
+				install_log "INFO" LIB "${rpm_name} has already been installed."
+				return 0
+			fi
+			
+			echo "${rpm_install_info}"|grep "error: cannot get exclusive lock on /var/lib/rpm/Packages" >/dev/null
+			if [ $? -eq 0 ]
+			then
+				install_log INFO LIB  "Getting the exclusive lock failed, wait 5 seconds and try again."
+				sleep 5
+				continue
+			fi
+			
+			#rpm -qa|grep "$(echo "${rpm_name}"|awk -F- '{print $(NF-2)}')"|grep "$(echo "${rpm_name}"|awk -F- '{print $1}')"
+			rpm -qa|grep "$(echo "${base_rpm_name}"|awk -F- 'BEGIN{OFS="-";FS="-"}{$NF="";print}'|sed 's/-$//')" 
+			if [ $? -eq 0 ];then
+				install_log "INFO" LIB "${base_rpm_name} has already been installed for advanced version ."
+				return 0
+			fi
+			
+			install_log "ERROR" "CHECK_ENV" "install package ${rpm_name} failed, the reason is ${rpm_install_info}."
+			return 1
+		fi
+	done
+}
+################################################################################
+# function: get_name_by_ne
+# description:
+#	  get node name in case of ne name
+# parameters:
+#			 
+# output:
+#
+# return:
+#			 0 succeed
+#			 1 fail
+################################################################################
+function get_name_by_ne
+{
+	typeset ne_name="$1"
+	case ${ne_name} in
+	MDMC_ALL|MDMC|MDMC_NO_CMS|MDMC_NO_PMS|MDMC_NO_PMS_CMS)
+		RETURN[0]="mdmc_ip"
+		RETURN[1]="db_ip"
+	;;
+	CONTENTFTP)
+		RETURN[0]="cntftp_ip"
+		RETURN[1]=""
+	;;	 
+	APACHE)
+		RETURN[0]="apache_ip"
+		RETURN[1]=""
+	;;
+	ENIP)
+		RETURN[0]="enip_ip"
+		RETURN[1]=""
+	;;
+	EnablerAdpt)
+		RETURN[0]="ea_ip"
+		RETURN[1]=""
+	;;
+	SubqueryAdpt)
+		RETURN[0]="sqa_ip"
+		RETURN[1]=""
+	;;
+	AccessServer)
+		RETURN[0]="as_ip"
+		RETURN[1]=""
+	;;
+	CGW)
+		RETURN[0]="cgw1_ip"
+		RETURN[1]=""
+	;;	
+	CGW2)
+		RETURN[0]="cgw2_ip"
+		RETURN[1]=""
+	;;	
+	Charging_with_Dccproxy)
+		RETURN[0]="cbe_ip"
+		RETURN[1]=""
+	;;
+	UOA)
+		RETURN[0]="uoa_ip"
+		RETURN[1]=""
+	;;
+	MsgTraceServer)
+		RETURN[0]="mts_ip"
+		RETURN[1]=""
+	;;
+	SmsAdpt)
+		RETURN[0]="smsa_ip"
+		RETURN[1]=""
+	;;
+	BILLCONVERTOR)
+		RETURN[0]="bcnvt_ip"
+		RETURN[1]=""
+	;;
+	CMSGW)
+		RETURN[0]="cmsgw_ip"
+		RETURN[1]=""
+	;;
+	BFM)
+		RETURN[0]="bfm_ip"
+		RETURN[1]="db_ip"
+	;;
+	BMS)
+		RETURN[0]="bms_ip"
+		RETURN[1]=""
+	;;
+	CMS)
+		RETURN[0]="cms_ip"
+		RETURN[1]=""
+	;;
+	
+	*)
+		RETURN[0]=""
+		RETURN[1]=""
+	;;
+	esac
+}
+
+################################################################################
+# function: get_local_timezone
+# description:get local timezone
+# parameters:
+# output:
+# return:
+#			 0 succeed
+#			 1 fail
+################################################################################
+function get_local_timezone
+{
+	read_value "tz_env_variable"
+	if [ $? -ne 0 ];then
+		install_log "ERROR" "LIB" "get_local_timezone : read value tz_env_variable failed"
+		return 1 
+	fi
+	typeset local_timezone="${RETURN[0]}"
+	
+	install_log "DEBUG" "LIB" "get_local_timezone*********local_timezone=${local_timezone}"	   
+	
+	RETURN[0]="${local_timezone}"
+	
+	return 0
+	
+}
+
+
+################################################################################
+# function: modify_tz_env
+# description:
+#	  modify TZ env
+# parameters:
+#			 
+# output:
+#
+# return:
+#			 0 succeed
+#			 1 fail
+################################################################################
+function modify_tz_env
+{
+	typeset tz_file="/etc/profile.d/profile.csh"
+	install_log "INFO" "LIB" "begin to modify TZ in ${tz_file}"
+	typeset local_timezone=""
+	read_value "tz_env_variable"
+	if [ $? -ne 0 ];then
+		install_log "ERROR" "LIB" "modify_tz_env : read value tz_env_variable failed for modify ${tz_file}"
+		return 1 
+	fi
+	local_timezone="${RETURN[0]}"
+	
+	install_log "DEBUG" "LIB" "modify_tz_env*********local_timezone=${local_timezone}"
+	
+	typeset tz_value=""
+	echo ${local_timezone}|grep 'GMT+' >/dev/null 2>&1
+	if [ $? -eq 0 ];then
+		tz_value=$(echo ${local_timezone}|sed 's/GMT+/PDT-/')
+	else
+		tz_value=$(echo ${local_timezone}|sed 's/GMT-/PDT+/')
+	fi
+	
+	install_log "DEBUG" "LIB" "modify_tz_env*********tz_value=${tz_value}"
+	
+	grep -v "#" ${tz_file} | grep -w "setenv" | grep -w "TZ" > "${IDEPLOY_NULL}" 2>&1
+	if [ $? -ne 0 ];then
+		echo "setenv TZ ${tz_value}" >> "${tz_file}"
+		return 0 
+	fi
+	typeset tz_local=$(grep -v "#" ${tz_file} | grep -w "setenv" | grep -w "TZ" | awk '{print $NF}' | sed -n '$p') 
+	sed "s#[ \t]*setenv[ \t]*TZ[ \t]*${tz_local}#setenv TZ ${tz_value}#g" "${tz_file}" > "${tz_file}_$$"
+	if [ $? -ne 0 ];then
+		return 1
+	fi
+	mv -f "${tz_file}_$$" "${tz_file}"
+	install_log "DEBUG" "LIB" "modify_tz_env : modify TZ from ${tz_local} to ${tz_value} in ${tz_file}"
+	install_log "INFO" "LIB" "modify TZ in ${tz_file} complete"	   
+}
+
+################################################################################
+# function: modify_tz_env_new
+# description:
+#	  modify TZ env
+# parameters:
+#			 
+# output:
+#
+# return:
+#			 0 succeed
+#			 1 fail
+################################################################################
+function modify_tz_env_new
+{
+	typeset tz_file="/etc/profile.local"
+	typeset csh_tz_file="/etc/csh.cshrc.local"
+	
+	install_log "INFO" "LIB" "begin to modify TZ in ${tz_file} and ${csh_tz_file}"
+	typeset local_timezone=""
+	read_value "tz_env_variable"
+	if [ $? -ne 0 ];then
+		install_log "ERROR" "LIB" "modify_tz_env_new : read value tz_env_variable failed for modify ${tz_file}"
+		return 1 
+	fi
+	local_timezone="${RETURN[0]}"
+	
+	install_log "DEBUG" "LIB" "modify_tz_env_new*********local_timezone=${local_timezone}"
+	
+	typeset tz_value=""
+	echo ${local_timezone}|grep 'GMT+' >/dev/null 2>&1
+	if [ $? -eq 0 ];then
+		tz_value=$(echo ${local_timezone}|sed 's/GMT+/PDT-/')
+	else
+		tz_value=$(echo ${local_timezone}|sed 's/GMT-/PDT+/')
+	fi
+	install_log "DEBUG" "LIB" "modify_tz_env_new*********the value of TZ is ${tz_value}"
+	
+	if [ ! -f ${tz_file} ];then
+		echo "export TZ='${tz_value}'" >> "${tz_file}"
+		install_log "INFO" "LIB" "the file ${tz_file} is not existed, add TZ variable to ${tz_file} succeed."
+	else
+		grep -v "#" ${tz_file} | grep -w "export" | grep "TZ[ \t]*=.*" > "${IDEPLOY_NULL}" 2>&1
+		if [ $? -ne 0 ];then
+			echo "export TZ='${tz_value}'" >> "${tz_file}"
+			install_log "INFO" "LIB" "add TZ variable to ${tz_file} succeed."
+		else
+			sed -i "s#[ \t]*export[ \t]*TZ[ \t]*=.*#export TZ='${tz_value}'#g" "${tz_file}"
+			if [ $? -ne 0 ];then
+				return 1
+			fi
+			install_log "INFO" "LIB" "replace TZ variable to ${tz_file} succeed."
+		fi
+	fi
+	
+	if [ ! -f ${csh_tz_file} ];then
+		echo "setenv TZ ${tz_value}" >> "${csh_tz_file}"
+		install_log "INFO" "LIB" "the file ${csh_tz_file} is not existed, add TZ variable to ${csh_tz_file} succeed."
+	else
+		grep -v "#" ${csh_tz_file} | grep -w "setenv" | grep -w "TZ" > "${IDEPLOY_NULL}" 2>&1
+		if [ $? -ne 0 ];then
+			echo "setenv TZ ${tz_value}" >> "${csh_tz_file}"
+			install_log "INFO" "LIB" "add TZ variable to ${csh_tz_file} succeed."
+		else
+			sed -i "s#[ \t]*setenv[ \t]*TZ.*#setenv TZ ${tz_value}#g" "${csh_tz_file}"
+			if [ $? -ne 0 ];then
+				return 1
+			fi
+			install_log "INFO" "LIB" "replace TZ variable to ${csh_tz_file} succeed."
+		fi
+	fi
+	install_log "INFO" "LIB" "modify TZ in ${tz_file} and ${csh_tz_file} complete"
+	
+	typeset tz_old_file="/etc/profile.d/profile.csh"
+	install_log "INFO" "LIB" "begin to delete TZ in ${tz_old_file}"
+	
+	grep -v "#" ${tz_old_file} | grep -w "setenv" | grep -w "TZ" > "${IDEPLOY_NULL}" 2>&1
+	if [ $? -eq 0 ];then
+		typeset tz_local=$(grep -v "#" ${tz_old_file} | grep -w "setenv" | grep -w "TZ") 
+		sed "/${tz_local}/d" "${tz_old_file}" > "${tz_old_file}_$$"
+		if [ $? -ne 0 ];then
+			return 1
+		fi
+		mv -f "${tz_old_file}_$$" "${tz_old_file}"
+		install_log "INFO" "LIB" "delete TZ in ${tz_old_file} succeed"
+	else	
+		install_log "INFO" "LIB" "there is no setenv TZ in ${tz_old_file}"
+	fi
+	install_log "INFO" "LIB" "delete TZ in ${tz_old_file} complete"
+}
+
+################################################################################
+# function: vcs_parameter_modify
+# description:
+#	  modify VCS parameter
+# parameters:
+#			 
+# output:
+#
+# return:
+#			 0 succeed
+#			 1 fail
+################################################################################
+function vcs_parameter_modify
+{
+		typeset flag=0
+		typeset cmd_list="${IDEPLOY_PKG_PATH}/script/vcs.conf"
+
+
+		cat ${cmd_list} > /dev/null 2>&1
+		while read line
+		do
+				typeset hostname=`hostname`
+				echo ${line} > ${TMP}/tmp.log
+				line=$(sed s/\<hostname\>/${hostname}/g ${TMP}/tmp.log)
+				install_log "INFO" "LIB" "exec cmd \"${line}\""
+				typeset i=0
+				typeset count=10
+				while [ $i -lt $count ]
+				do
+					run_vcs_cmd "${line}"
+					if [ $? -ne 0 ];then
+						install_log "DEBUG" "LIB" "exe \"${line}\" faile,try again..."
+						sleep 1
+					else
+						install_log "INFO" "LIB" "exec cmd \"${line}\" succeed"
+						break
+					fi
+					((i=i+1))
+				done
+				
+				if [ $i -ge $count ];then
+					((flag=flag+1))
+				fi
+				
+				rm ${TMP}/tmp.log
+		done<${cmd_list}
+
+		if [ ${flag} -gt 0	];then
+				install_log "ERROR" "LIB" "modify vcs parameter failed"
+				return 1
+		fi
+		
+
+}
+
+################################################################################
+# function		:get_base_physics_ip
+# description	:get base physics ip
+# parameters	:null
+# output		:base physics ip
+# return		:0 succeed,	 1 fail
+################################################################################
+function get_base_physics_ip
+{
+	typeset log_prefix="function get_base_physics_ip:"
+	RETURN[0]=""
+	
+	if [ ! -f ${TMP}/localhost_ip ]; then
+		install_log "ERROR" "LIB" "Getting local base ip address failed."
+		return 1
+	else
+		local_base_ip=$(cat ${TMP}/localhost_ip|grep "local_base_ip"|awk -F= '{print $2}' 2>&1)
+		if [ "x${local_base_ip}" = "x" ]; then
+			install_log "ERROR" "LIB" "Getting local base ip address failed."
+			return 1
+		fi
+		
+		RETURN[0]="${local_base_ip}"
+	fi
+	
+	return 0
+}
+
+################################################################################
+# name	: get_oracle_env
+# desc	: get oracle env
+# params: $oracle_user_env
+# input : null
+# output: RETURN[0]
+# return: 0 succ, 1 failed
+################################################################################
+function get_oracle_env
+{
+	install_log "DEBUG" "LIB" "Begin to get oracle base and home."
+	#DTS2012082204088 x00193019
+	grep "^oracle:" /etc/passwd >/dev/null
+	if [ $? -ne 0 ];then
+		install_log "ERROR" "LIB" "oracle not exist in /etc/passwd, please check user oracle is exist."
+		return 1
+	fi
+	#DTS2012082204088  x00193019 -END
+	oracle_user_home=$(awk -F: '/^oracle:/ {print $6}' /etc/passwd)
+	if [ -d "${oracle_user_home}" ]; then
+		typeset user_who=`whoami`
+		if [ "${user_who}" != "oracle" ]; then
+			oracle_home=`su - oracle -c "env | grep ORACLE_HOME= | awk -F= '{print \\$NF}'"`
+			oracle_base=`su - oracle -c "env | grep ORACLE_BASE= | awk -F= '{print \\$NF}'"`
+		else
+			oracle_home=`env | grep ORACLE_HOME= | awk -F= '{print $NF}'`
+			oracle_base=`env | grep ORACLE_BASE= | awk -F= '{print $NF}'`
+		fi
+
+		if [ "X${oracle_home}" = "X" ]; then 
+			install_log "ERROR" "LIB" "Getting oracle_home failed, please check oracle home."
+			return 1
+		elif [ "X${oracle_base}" = "X" ]; then
+			install_log "ERROR" "LIB" "Getting oracle_base failed, please check oracle base."
+			return 1
+		fi
+	else
+		install_log "ERROR" "LIB" "${oracle_user_home} is not a directory please check it."
+		return 1
+	fi
+
+	echo "${oracle_home}" > "${TMP}/oracle_home.cfg"
+	echo "${oracle_base}" > "${TMP}/oracle_base.cfg"
+	
+	install_log "DEBUG" "LIB" "Get oracle base and home successfully."
+	return 0 
+}
+
+################################################################################
+# name	: get_oracle_home
+# desc	: get oracle home
+# params: null
+# input : null
+# output: RETURN[0]
+# return: 0 succ, 1 failed
+################################################################################
+function get_oracle_home
+{
+	install_log "DEBUG" "LIB" "Begin to get oracle home."
+	#DTS2012082204088 x00193019
+	if [ ! -f ${TMP}/oracle_home.cfg ];then
+		install_log "ERROR" "LIB" "File oracle_home.cfg not exist, please check oracle's env[ORACLE_HOME]."
+		return 1
+	fi
+	#DTS2012082204088 x00193019 -END
+	oracle_home=`cat "${TMP}/oracle_home.cfg"`
+	if [ "X${oracle_home}" = "X" ]; then 
+		install_log "ERROR" "LIB" "Getting oracle_home failed, please check oracle home."
+		return 1
+	fi
+	
+	RETURN[0]="${oracle_home}"
+	
+	install_log "DEBUG" "LIB" "Get oracle home successfully."
+	return 0 
+}
+
+
+################################################################################
+# name	: get_teastore_home
+# desc	: get teastore home
+# params: null
+# input : null
+# output: RETURN[0]
+# return: 0 succ, 1 failed
+################################################################################
+function get_teastore_home
+{
+		install_log "DEBUG" "LIB" "Begin to get oracle home."
+
+		if [ ! -f ${TMP}/teastore_home.cfg ];then
+				install_log "ERROR" "LIB" "File teastore_home.cfg not exist."
+				return 1
+		fi
+
+		teastore_home=`cat "${TMP}/teastore_home.cfg"`
+		if [ "X${teastore_home}" = "X" ]; then
+				install_log "ERROR" "LIB" "Getting teastore_home failed, please check teastore home."
+				return 1
+		fi
+
+		RETURN[0]="${teastore_home}"
+
+		install_log "DEBUG" "LIB" "Get teastore home successfully."
+		return 0
+}
+
+################################################################################
+# name	: get_teastore_jdk
+# desc	: get teastore jdk
+# params: null
+# input : null
+# output: RETURN[0]
+# return: 0 succ, 1 failed
+################################################################################
+function get_teastore_jdk
+{
+		install_log "DEBUG" "LIB" "Begin to get oracle home."
+
+		if [ ! -f ${TMP}/teastore_jdk.cfg ];then
+				install_log "ERROR" "LIB" "File teastore_jdk.cfg not exist."
+				return 1
+		fi
+
+		teastore_jdk=`cat "${TMP}/teastore_jdk.cfg"`
+		if [ "X${teastore_jdk}" = "X" ]; then
+				install_log "ERROR" "LIB" "Getting teastore_jdk failed, please check teastore jdk value."
+				return 1
+		fi
+
+		RETURN[0]="${teastore_jdk}"
+
+		install_log "DEBUG" "LIB" "Get teastore jdk successfully."
+		return 0
+}
+################################################################################
+# name	  : user_delete
+# describe: delete database user.
+# parameter list:
+#			dba_username
+#			dba_password
+#			usr_username
+#			db_oracle_sys_net_service_name
+# return  : 0:success
+#			1:faild
+################################################################################
+function user_delete
+{
+	typeset dba_username=$1
+	typeset dba_password=$2
+	typeset usr_username=$3
+	typeset net_service_name=$4
+	
+	if [ "X${dba_username}" = "Xsys" ];then
+		typeset sys_user_type="as sysdba"
+	else
+		typeset sys_user_type=""
+	fi
+	
+	#delete user
+	typeset flag=0
+	typeset -i idx=0
+	while [ ${idx} -lt 10 ]
+	do
+		su - oracle -c "sqlplus /nolog" > ${TMP}/del_db_user.log <<xEOF
+connect ${dba_username}/${dba_password}@${net_service_name} ${sys_user_type}
+drop user ${usr_username} cascade;
+exit;
+xEOF
+	
+		#adjust delete user success or not
+		#adjust delete user is exist or not
+		typeset user_exist_error=`grep 'ORA-01918' ${TMP}/del_db_user.log`
+		typeset user_drop_flag=$(grep "User dropped" ${TMP}/del_db_user.log)
+		if [ "X${user_exist_error}" != "X" ]; then
+			flag=1
+			if [ ${idx} -eq 0 ];then
+				install_log INFO DB_DELETE "DB user: ${usr_username} does not exist."
+				return 0
+			else
+				break
+			fi
+		fi
+		if [ "X${user_drop_flag}" != "X" ]; then
+			install_log INFO DB_DELETE "Drop DB user: ${usr_username} successfully at the ${idx} time."
+			flag=1
+			break
+		fi
+
+		#adjust delete user success or not
+		typeset del_error_info=$(grep 'ERROR' ${TMP}/del_db_user.log)
+		if [ "X${del_error_info}" != "X" ]; then
+			#if the user is still be connected ,kill the session and try to drop it again 
+			typeset conn_error_info=$(grep 'cannot drop a user that is currently connected' ${TMP}/del_db_user.log)
+			if [ "X${conn_error_info}" != "X" ];then
+				install_log "INFO" "DB_DELETE" "the user:${usr_username} is still be connected ,kill the session and try to drop it again" 
+				su - oracle -c "sqlplus /nolog"  > ${TMP}/kill_session.log <<xEOF
+connect ${dba_username}/${dba_password}@${net_service_name} ${sys_user_type}
+DECLARE
+  v_date			  varchar(24) default '[' || to_char(sysdate,
+														 'yyyy-MM-DD HH24:mi:ss') || '] ';
+  v_sql_error_code	  PLS_INTEGER;
+  v_sql_error_message VARCHAR2(512);
+  ex_notfound EXCEPTION;
+  v_sql_str varchar2(128);
+  v_count	int default 0;
+  v_username varchar2(64) default '$usr_username';
+
+begin
+  execute immediate 'alter user ' || v_username || ' account lock';
+  select count(1)
+	into v_count
+	from v\$session v
+   where v.USERNAME = upper(v_username);
+  if v_count <> 0 then
+	for item in (select v.SID, v.SERIAL#, v.STATUS	from v\$session v where v.USERNAME = upper(v_username)) 
+	  loop
+		  if upper(item.status) != 'KILLED' then
+			v_sql_str:='alter system kill session '''||to_char(item.sid)||','||to_char(item.serial#)||''' immediate';
+			execute immediate  v_sql_str;
+		  end if;
+	  end loop;
+  end if;
+  dbms_lock.sleep(5); 
+
+exception
+  when others then
+	v_sql_error_code := sqlcode;
+	rollback work;
+	v_sql_error_message := sqlerrm(v_sql_error_code);
+	dbms_output.put_line(v_date ||
+						 ' [ERROR] [drop_user_session] The oracle error code is ' ||
+						 v_sql_error_code);
+	dbms_output.put_line(v_date ||
+						 ' [ERROR] [drop_user_session] The oracle error message is ' ||
+						 v_sql_error_message);
+		dbms_output.put_line(v_date ||
+						 ' [ERROR] [drop_user_session] The oracle error sql str is ' ||
+						 v_sql_str);
+	rollback;
+	return;
+  
+end;
+/
+xEOF
+			fi
+		fi
+		((idx=idx+1))
+	done
+	
+	if [ ${idx} -eq 10 -a ${flag} -eq 0 ];then
+		install_log ERROR DB_DELETE "delete user ${usr_username} failed after ten times, please see ${TMP}/del_db_user.log for detailed information and try to delete it manually.."
+		return 1
+	fi
+	install_log INFO DB_DELETE "delete user ${usr_username} successfully."
+
+	return 0
+}
+
+################################################################################
+# name	: get_oracle_base
+# desc	: get oracle base
+# params: null
+# input : null
+# output: RETURN[0]
+# return: 0 succ, 1 failed
+################################################################################
+function get_oracle_base
+{
+	install_log "DEBUG" "LIB" "Begin to get oracle home."
+	
+	oracle_base=`cat "${TMP}/oracle_base.cfg"`
+	if [ "X${oracle_base}" = "X" ]; then 
+		install_log "ERROR" "LIB" "Getting oracle_base failed, please check oracle base."
+		return 1
+	fi
+	
+	RETURN[0]="${oracle_base}"
+	
+	install_log "DEBUG" "LIB" "Get oracle base successfully."
+	return 0
+}
+################################################################################
+# name	: check_suse_version_update_ssh
+# desc	: check_suse_version_update_ssh
+# params: null
+# input : null
+# output: RETURN[0]
+# return: 0 succ, 1 failed
+################################################################################
+function check_suse_version_update_ssh
+{
+	install_log "DEBUG" "LIB" "Begin to update ssh."
+	
+	cp /etc/ssh/sshd_config /etc/ssh/old_sshd_config
+	
+	grep "^ListenAddress[ \t]*" /etc/ssh/sshd_config > /etc/ssh/tmp_ListenAddress
+	
+	service sshd stop >/dev/null 2>&1
+	sleep 2
+	
+	tar -zxf ${IDEPLOY_PKG_PATH}/script/openssh5.6.tar.gz > /dev/null
+	if [ $? -ne 0 ];then
+		install_log "ERROR" "LIB" "tar -zxf openssh5.6.tar.gz failed."
+		return 1
+	fi
+	
+	mv ${IDEPLOY_PKG_PATH}/script/openssh5.6/etc/ssh/* /etc/ssh
+	if [ $? -ne 0 ];then
+		install_log "ERROR" "LIB" "mv file ${IDEPLOY_PKG_PATH}/script/openssh5.6/etc/ssh failed."
+		return 1
+	fi
+	
+	mv ${IDEPLOY_PKG_PATH}/script/openssh5.6/usr/bin/* /usr/bin
+	if [ $? -ne 0 ];then
+		install_log "ERROR" "LIB" "mv file ${IDEPLOY_PKG_PATH}/script/openssh5.6/usr/bin failed."
+		return 1
+	fi
+	
+	mkdir -p /usr/libexec
+	mkdir -p /var/empty
+	
+	mv ${IDEPLOY_PKG_PATH}/script/openssh5.6/usr/libexec/* /usr/libexec
+	if [ $? -ne 0 ];then
+		install_log "ERROR" "LIB" "mv file ${IDEPLOY_PKG_PATH}/script/openssh5.6/usr/libexec failed."
+		return 1
+	fi
+	
+	mv ${IDEPLOY_PKG_PATH}/script/openssh5.6/usr/sbin/* /usr/sbin
+	if [ $? -ne 0 ];then
+		install_log "ERROR" "LIB" "mv file ${IDEPLOY_PKG_PATH}/script/openssh5.6/usr/sbin failed."
+		return 1
+	fi
+	
+	mv ${IDEPLOY_PKG_PATH}/script/openssh5.6/usr/share/man/man1/* /usr/share/man/man1
+	if [ $? -ne 0 ];then
+		install_log "ERROR" "LIB" "mv file ${IDEPLOY_PKG_PATH}/script/openssh5.6/usr/share/man/man1 failed."
+		return 1
+	fi
+	
+	mv ${IDEPLOY_PKG_PATH}/script/openssh5.6/usr/share/man/man5/* /usr/share/man/man5
+	if [ $? -ne 0 ];then
+		install_log "ERROR" "LIB" "mv file ${IDEPLOY_PKG_PATH}/script/openssh5.6/usr/share/man/man5 failed."
+		return 1
+	fi
+	
+	mv ${IDEPLOY_PKG_PATH}/script/openssh5.6/usr/share/man/man8/* /usr/share/man/man8
+	if [ $? -ne 0 ];then
+		install_log "ERROR" "LIB" "mv file ${IDEPLOY_PKG_PATH}/script/openssh5.6/usr/share/man/man8 failed."
+		return 1
+	fi
+	
+	rm -rf ${IDEPLOY_PKG_PATH}/script/openssh5.6
+
+	chmod 600 /etc/ssh/ssh_host_dsa_key
+	chmod 600 /etc/ssh/ssh_host_rsa_key
+	
+	sed -i "/^#ListenAddress 0.0.0.0/r /etc/ssh/tmp_ListenAddress" /etc/ssh/sshd_config
+	
+	service sshd start	1>"${IDEPLOY_NULL}" 2>"${IDEPLOY_NULL}"
+	
+	install_log "DEBUG" "LIB" "Update ssh successfully."
+	return 0
+}
+
+################################################################################
+# name	:	update_vsftpd_conf
+# parameter list: null
+# input	  : key = value
+# output  : 0 success 1 failure
+# return  : null
+# invoker : main
+################################################################################
+function update_vsftpd_conf
+{
+	typeset key=$1
+	typeset value=$2
+	typeset vsftpd_file="/etc/vsftpd.conf"
+	
+	if [ ! -e ${vsftpd_file} ];then
+		install_log "ERROR" "LIB" "The file ${vsftpd_file} is not exits."
+		return 1
+	fi
+	
+	key_num=$(grep -wri "${key}" ${vsftpd_file} | grep -v "#"  | wc -l)
+	if [ "${key_num}" -ne 1 ];then
+		sed -i "/^${key}=/d" ${vsftpd_file}
+		echo "${key}=${value}" >> ${vsftpd_file}
+		return 0
+	else
+		update_cfg_value "${vsftpd_file}" "${key}" "${value}"
+		if [ $? -ne 0 ];then
+			install_log "ERROR" "CHECK_ENV" "modify ${key}=${value} in ${vsftpd_file} failed"
+			return 1
+		fi
+	fi
+	
+	return 0
+}
+
+function get_main_version
+{
+	cfg="${IDEPLOY_PKG_PATH}/script/dsdp_version.cfg"
+	if [ ! -f $cfg ]
+	then
+		install_log "ERROR" "$cfg directory file does not exist."
+		return 1
+	else
+		install_log "INFO" "$cfg directory file exists."
+	fi 
+	typeset version=""
+	count=$(grep 'V[0-9]\{3\}R[0-9]\{3\}C[0-9]\{2\}' $cfg| wc -l)
+	if [ "X${count}" != "X1" ];then
+		install_log "ERROR" "Faild to get vertion from $cfg."
+		return 1
+	else
+		version=$(awk -F = '{print $2}' $cfg)
+	fi 
+	RETURN[0]=${version}
+	return 0
+}
+
+################################################################################
+# name	:	get_ne_host_num_by_ne_name
+# parameter ne_name: 
+# return  : host_num
+################################################################################
+function get_ne_host_num_by_ne_name
+{
+	typeset neName=$1
+	typeset hostNum=0
+	typeset localMachineNEList
+	
+	read_value "_localMachineNEList"
+	if [ $? -ne 0 ];then
+		install_log DEBUG LIB "get _localMachineNEList value failed"
+		return 1
+	fi
+	localMachineNEList="${RETURN[0]}"
+	
+	if [ "X" != "X${neName}" ];then
+	    hostNum=$(echo $localMachineNEList | awk -F ${neName} '{print NF}')
+	   ((hostNum=hostNum-1))
+	fi
+	echo "$hostNum"
+	return 0
+}
+
+################################################################################
+# name	:	get_ne_all_host_ip_by_ne_name
+# parameter ne_name: 
+# return  : host_ip_list
+################################################################################
+function get_ne_all_host_ip_by_ne_name
+{
+	typeset neName=$1
+	typeset returnHostNum=0
+	typeset hostList
+	typeset localMachineNEList
+	typeset allHostNum
+	typeset count=1
+	
+	read_value "_localMachineNEList"
+	if [ $? -ne 0 ];then
+		install_log DEBUG LIB "get _localMachineNEList value failed"
+		return 1
+	fi
+	localMachineNEList="${RETURN[0]}"
+	
+	if [ "X" != "X${neName}" ];then
+	    allHostNum=$(echo $localMachineNEList | awk -F , '{print NF}')
+		while [ $count -le $allHostNum  ]
+		do
+		   typeset tempHostInfo
+		   typeset returnHostInfo
+		   tempHostInfo=$(echo $localMachineNEList | awk -F , '{print $'${count}'}')
+		   returnHostInfo=$(echo $tempHostInfo | grep ${neName})
+		   if [ "X" != "X${returnHostInfo}" ]
+		   then
+			   hostList[$returnHostNum]=${returnHostInfo%:*}
+			   ((returnHostNum=returnHostNum+1))
+		   fi
+		   ((count=count+1))
+		done
+		echo "${hostList[@]}"
+	fi
+	
+	return 0
+}

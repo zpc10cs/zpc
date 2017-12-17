@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="gb2312"?>
+<custom_tools>
+    <node_tools>
+        <tool cmd="pwd;id" args="" desc="u_pwd;id"/>
+		<tool cmd="ls -l" args="" desc="u_ls -l"/>
+        <tool cmd="df -k" desc="u_df -k"/>
+    </node_tools>
+	<global_tools desc="globalTools_desc">
+		<tool name="modify_config_item" desc="modify_config_item_desc" type="1" />
+		<tool name="export_all_config_item" desc="export_all_config_item_desc" type="5" />       
+        <tool name="uninstall" desc="uninstall" type="ExecRemoteScript" alert="delete_dsdp_warning">
+            <exec cmd="su - root" args="" desc="chang to root" timeout="60000"/>
+            <exec cmd="dsdp_uninstall.sh" args="" desc="uninstall" timeout="300000"/>
+	    </tool>  
+		<tool name="stop" desc="dsdp_stop" type="ExecRemoteScript" alert="stop_dsdp_warning">
+            <exec cmd="su - root" args="" desc="chang to root" timeout="60000"/>
+            <exec cmd="dsdp_stop.sh" args="" desc="dsdp_stop" timeout="300000"/>
+	    </tool>  
+	</global_tools>
+</custom_tools>
+
+
+

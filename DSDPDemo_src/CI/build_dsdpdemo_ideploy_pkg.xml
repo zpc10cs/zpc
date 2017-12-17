@@ -1,0 +1,84 @@
+<project name="DSDPDEMO_BUILD_IDEPLOY" default="build" basedir="../">
+	<property file="${basedir}/CI/build.properties" />
+	<property name="app.dir" value="${basedir}/install/app" />
+	<property name="db.dir" value="${basedir}/install/db" />
+	<property name="conf.dir" value="${basedir}/conf" />
+	<property name="version.dir" value="${basedir}/version" />
+	<property name="ideploy.dir" value="${basedir}/install/ideploy" />
+
+	<!-- ======== -->
+	<!-- 开始  -->
+	<!-- ======== -->
+	<target name="build">
+		<antcall target="createDir" />
+		<antcall target="compressApp" />
+		<antcall target="compressDb" />
+		<antcall target="compressZip" />
+	</target>
+
+	<!--删除老的tar.gz和zip包-->
+	<target name="createDir">
+
+		<delete dir="${app.dir}" failonerror="false" />
+		<mkdir dir="${app.dir}" />
+		<mkdir dir="${app.dir}/ideploy" />
+		<mkdir dir="${app.dir}/dsdpdemo" />
+		<mkdir dir="${app.dir}/dsdpdemo/lib" />
+		<mkdir dir="${app.dir}/dsdpdemo/conf" />
+		<mkdir dir="${app.dir}/dsdpdemo/version" />
+
+		<delete dir="${db.dir}" failonerror="false" />
+		<mkdir dir="${db.dir}" />
+		<mkdir dir="${db.dir}/dsdpdemo_db" />
+
+		<delete dir="${basedir}/install/DS_dsdpdemo_install/apppkg" failonerror="false" />
+		<mkdir dir="${basedir}/install/DS_dsdpdemo_install/apppkg" />
+
+		<delete file="${basedir}/install/DS_dsdpdemo_install.zip" failonerror="false" />
+	</target>
+	<target name="compressApp">
+		<!--复制新的lib包-->
+		<copy todir="${app.dir}/dsdpdemo/lib">
+			<fileset dir="${basedir}/lib">
+				<include name="3rd/*.jar" />
+				<include name="dsdpdemo/*.jar" />
+				<include name="commons/*.jar" />
+				<include name="soabean/*.jar" />
+			</fileset>
+		</copy>
+		<copydir src="${version.dir}" dest="${app.dir}/dsdpdemo/version" includes="**/*" />
+		<copydir src="${conf.dir}" dest="${app.dir}/dsdpdemo/conf" includes="**/*" />
+		<copydir src="${ideploy.dir}" dest="${app.dir}/ideploy/" includes="**/*" />
+
+
+		<!--删除工程包-->
+		<delete file="${app.dir}/DSDPDEMO_${version}.tar.gz" failonerror="false" />
+
+		<!--打app包-->
+		<tar destfile="${app.dir}/DSDPDEMO_${version}.tar.gz" compression="gzip">
+			<tarfileset dir="${app.dir}" filemode="750">
+				<include name="ideploy/" />
+				<include name="dsdpdemo/" />
+			</tarfileset>
+		</tar>
+	</target>
+
+	<target name="compressDb">
+		<!--复制工程数据库脚本到script目录-->
+		<copydir src="${basedir}/dbscripts" dest="${db.dir}/dsdpdemo_db" includes="**/*" />
+		<tar destfile="${db.dir}/DSDPDEMODB_${version}.tar.gz" compression="gzip">
+			<tarfileset dir="${db.dir}">
+				<include name="dsdpdemo_db/" />
+			</tarfileset>
+		</tar>
+	</target>
+
+	<!--把DS_dsdpdemo_install打成zip包-->
+	<target name="compressZip">
+		<!--把新打的tar.gz安装包copy到apppkg里面-->
+		<copydir src="${app.dir}" dest="${basedir}/install/DS_dsdpdemo_install/apppkg" includes="*.tar.gz" />
+		<copydir src="${db.dir}" dest="${basedir}/install/DS_dsdpdemo_install/apppkg" includes="*.tar.gz" />
+		<!-- 压缩ideploy发布包-->
+		<zip destfile="${basedir}/install/DS_dsdpdemo_install.zip" basedir="${basedir}/install/" includes="DS_dsdpdemo_install/**/*" />
+	</target>
+</project>

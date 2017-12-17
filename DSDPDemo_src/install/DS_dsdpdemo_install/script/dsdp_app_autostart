@@ -1,0 +1,108 @@
+#!/usr/bin/ksh
+
+cd $(dirname "$0")
+
+### BEGIN INIT INFO
+# Provides:          dsdp app
+# Required-Start:    $network xinetd
+# Required-Stop:     
+# Default-Start:     3 5
+# Default-Stop:      0 1 2 4 6
+# Description:		 dsdp app autostart service
+# Short-Description: dsdp app autostart service
+### END INIT INFO
+
+################################################################################
+# name	   : start_app
+# describe : auto start user's app.
+# rerurn   : 0:success
+#		     1:failed
+################################################################################
+function start_app
+{
+	echo_log "INFO" "=================================================="
+	echo_log "INFO" "begin to invoke start_app."
+	user_cfg="/etc/dsdp/dsdp_user.cfg"
+	if [ ! -f ${user_cfg} ];then
+		echo_log "ERROR" "file ${user_cfg} doesn't exsit, do nothing."
+		return 1
+	fi
+
+	while read line
+	do
+		if [ "x${line}" == "x" ];then
+			continue
+		fi
+
+		user_name=$(echo ${line} | awk -F= '{print $1}')
+
+		id ${user_name} >/dev/null 2>&1
+		if [ $? -ne 0 ];then
+			echo_log "WARN" "user ${user_name} doesn't exist, no need to do special operation before auto start."
+			continue
+		fi
+		
+		echo_log "INFO" "begin to execute command for user ${user_name}."
+		command_value=$(echo ${line} | awk -F= '{print $2}')
+		su - ${user_name} -c "${command_value}" &
+		echo_log "INFO" "end to execute command \" ${command_value} \" for user ${user_name}, pid is $!."
+	done < ${user_cfg}
+	
+	echo_log "INFO" "end to invoke start_app."
+	
+	return 0
+}
+
+
+################################################################################
+# name	   : stop_app
+# describe : auto stop user's app.
+# rerurn   : 0:success
+#		     1:failed
+################################################################################
+function stop_app
+{
+	echo_log "INFO" "no need to stop."
+	return 0
+
+}
+
+################################################################################
+# Function    : echo_log
+# Description : record log info
+# Output      : None
+# Return      : 1 failed
+#               0 success
+################################################################################
+function echo_log
+{
+    typeset DATE_STR=$(date '+%Y-%m-%d %H:%M:%S')
+
+    #check parameters
+    log_type="$1"
+	shift 1
+    log_msg="$@"
+
+	appstart_log="/var/log/dsdp_app_autostart.log"
+	
+    echo "[${DATE_STR}] | ${log_type} | ${log_msg}"
+
+    echo "[${DATE_STR}] | ${log_type} | ${log_msg}" | tee -a ${appstart_log}
+}
+
+#############################################################
+action=$1
+
+case ${action} in
+	start)
+		start_app &
+;;
+	stop)
+		stop_app &
+;;
+*)
+    echo $"Usage: $0 {start|stop}"
+    exit 1
+esac
+
+

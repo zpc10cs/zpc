@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<policies>
+	<policy id="startup" desc="BME.UCONFIGDESC.STARTUP">
+		<extension type="document">classpath*:*.fixture.xml</extension>
+	</policy>
+	<policy id="secretkey" desc="BME.UCONFIGDESC.SECRETKEY">
+		<extension type="properties">classpath*:bme.secretkey.properties
+		</extension>
+	</policy>
+	<policy id="keyfactor" desc="BME.UCONFIGDESC.KEYFACTOR">
+		<extension type="properties">classpath*:keyfactor.properties</extension>
+	</policy>
+</policies>

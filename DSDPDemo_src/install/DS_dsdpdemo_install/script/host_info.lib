@@ -1,0 +1,2104 @@
+#!/bin/ksh
+
+################################################################################
+# Name       : host_info.lib
+# Description: common function about host info
+# Date       : 2008-12-05
+# Function   :
+#              get_localhost_ip    get localhost ip address.
+#              get_install_user    get ideploy install user.
+#              get_ne_info         get ne infor,return NE_NODE_NUM, NE_DM_TYPE[n],
+#                                  NE_FLOAT_IP[n], NE_HOST_IP[n], NE_STANDBY_IP[n].
+#              get_local_ne_list   get ne list install in localhost.
+#              get_localmachine_ne_list
+#                                  get ne list install in local physical machine.
+#              get_dm_type         get dual host type:single, coldDualHost, hostDualHost.
+#              get_host_type       get host type:single, master,standby.
+#              get_host_ip         get host ip address of dualhost.
+#              get_standby_ip      get standby ip address of dualhost.
+#              get_float_ip        get float ip address of dualhost.
+#              get_ne_index        get local host index in this ne, return value in [0-n].
+#              get_node_index      get local host node index in this ne(regard dual host as two single node),
+#                                  return value in [0-n].
+#              get_ne_index_in_localmachine
+#                                  get specify ne index of all ne in physical machine. 
+#              get_selected_net_type
+#                                  get selected net type name.
+#              get_ne_size         get size of specified ne.
+#              get_ne_list         get ne list of select ne type.
+#              get_float_ip_index  get index of current float ip address.
+#              get_net_struc_business_type
+#                                  get business type of current net structure.
+#              get_net_struc_capacity_type
+#                                  get capacity type of current net structure.
+#              get_local_first_dualhost_ne_name
+#                                   get localhost first dualhost name.
+#              get_local_float_ip  if host type is single,return local ip. if host type is #master or standby ,rerurn float ip
+#              get_all_ip   get all ne ip,include oracle,ne fabric/base/back ip
+#              get_local_machine_float_ip
+#              get_base_ip   get current ne base ip and card
+#              get_opposite_root_pwd   get the root password of opposite ip or current single host
+#              get_install_standby_ip   get install standby ip
+#              get_install_host_ip   get install host ip  
+#			   get_install_all_ip    get all install ip:host ip,stanby ip
+#			   get_install_ip
+#				chang_ne_name     return simple ne name
+#				get_install_ne_list  get install ne list
+################################################################################
+
+################################################################################
+# global variables
+################################################################################
+NE_NODE_NUM=0
+NE_DM_TYPE[0]=""
+NE_FLOAT_IP[0]=""
+NE_HOST_IP[0]=""
+NE_HOST_USER[0]=""
+NE_STANDBY_IP[0]=""
+NE_STANDBY_USER[0]=""
+################################################################################
+# name    : get_local_float_ip
+# describe: if host type is single,return local ip. if host type is master or standby , 
+#           return float ip
+# parameter list: null
+# output  :
+#         RETURN[0]    ip address 
+# rerurn  : 0:success
+#         1:failed
+################################################################################
+function get_local_float_ip
+{
+    RETURN[0]=""
+    get_host_type
+    if [ $? -ne 0 ];then
+        install_log DEBUG "LIB" "Getting host type failed."
+        return 1
+    fi
+    typeset host_type="${RETURN[0]}"
+    if [ "x${host_type}" = "xsingle" ];then
+        get_localhost_ip
+        if [ $? -ne 0 ];then
+            install_log DEBUG "LIB" "Getting local host ip failed."
+            return 1 
+        fi
+    else
+        get_float_ip
+        if [ $? -ne 0 ];then
+            install_log DEBUG "LIB" "Getting float ip failed."
+            return 1 
+        fi
+    fi
+    return 0
+}
+################################################################################
+# name    : get_localhost_ip
+# describe: get localhost ip address.
+# parameter list: null
+# output  :
+#         RETURN[0]    ip address of localhost
+# rerurn  : 0:success
+#         1:failed
+################################################################################
+function get_localhost_ip
+{
+	RETURN[0]=""
+	
+    read_value "_hostip"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG "LIB" "Getting _hostip failed."
+		return 1
+	fi
+        
+	return 0
+}
+
+################################################################################
+# name    : get_install_user
+# describe: get ideploy install user name.
+# parameter list: null
+# output  :
+#         RETURN[0]    install user name
+# rerurn  : 0:success
+#         1:failed
+################################################################################
+function get_install_user
+{
+    RETURN[0]=""
+    read_value "_username"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG "LIB" "Getting ideploy install user name failed."
+		return 1
+	fi
+    
+	return 0
+}
+
+################################################################################
+# name    : get_all_ne_list
+# describe: get all ne list install.
+# parameter list: null
+# output  :
+#         RETNUM       ne number
+#         RETURN[0-n]  ne name list
+# rerurn  : 0:success
+#         1:failed
+################################################################################
+function get_all_ne_list
+{
+	RETNUM=0
+	RETURN[0]=""
+	read_value "_selectedNETypeList"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting ne list in localhost failed."
+		return 1
+	fi
+	typeset ne_list_str="${RETURN[0]}"
+	
+	typeset ne_list=`echo "${ne_list_str}" | sed -e "s/,/ /g"`
+	
+	RETNUM=0
+    typeset ne_name=""
+	for ne_name in ${ne_list}
+	do
+		RETURN[${RETNUM}]="${ne_name}"
+		((RETNUM=RETNUM+1))
+	done
+	
+	return 0
+}
+################################################################################
+# name    : get_local_ne_list
+# describe: get ne list install in localhost.
+# parameter list: null
+# output  :
+#         RETNUM       ne number
+#         RETURN[0-n]  ne name list
+# rerurn  : 0:success
+#         1:failed
+################################################################################
+function get_local_ne_list
+{
+	RETNUM=0
+	RETURN[0]=""
+	read_value "_localNETypeList"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting ne list in localhost failed."
+		return 1
+	fi
+	typeset ne_list_str="${RETURN[0]}"
+	
+	typeset ne_list=`echo "${ne_list_str}" | sed -e "s/,/ /g"`
+	
+	RETNUM=0
+    typeset ne_name=""
+	for ne_name in ${ne_list}
+	do
+		RETURN[${RETNUM}]="${ne_name}"
+		((RETNUM=RETNUM+1))
+	done
+	
+	return 0
+}
+
+################################################################################
+# name    : get_current_task_list
+# describe: get ne list install in localhost.
+# parameter list: null
+# output  :
+#         RETNUM       ne number
+#         RETURN[0-n]  ne name list
+# rerurn  : 0:success
+#         1:failed
+################################################################################
+function get_current_task_list
+{
+	RETNUM=0
+	RETURN[0]=""
+	read_value "_localNETypeList"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting ne list in localhost failed."
+		return 1
+	fi
+	typeset ne_list_str="${RETURN[0]}"
+	
+	typeset ne_list=`echo "${ne_list_str}" | sed -e "s/,/ /g"`
+	
+	RETNUM=0
+    typeset ne_name=""
+	for ne_name in ${ne_list}
+	do
+		RETURN[${RETNUM}]="${ne_name}"
+		((RETNUM=RETNUM+1))
+	done
+	
+	return 0
+}
+
+################################################################################
+# name    : get_ne_info
+# describe: get ne information, include: node number, ip, user, and so on.
+# parameter list:
+#            ne_name     ne name.
+# output  :
+#            NE_NODE_NUM
+#            NE_DM_TYPE[0-n]
+#            NE_FLOAT_IP[0-n]
+#            NE_HOST_IP[0-n]
+#            NE_HOST_USER[0-n]
+#            NE_STANDBY_IP[0-n]
+#            NE_STANDBY_USER[0-n]
+# rerurn  : 0:success
+#           1:failed
+################################################################################
+function get_ne_info
+{
+	RETURN[0]=""
+	NE_NODE_NUM=0
+	NE_DM_TYPE[0]=""
+	NE_FLOAT_IP[0]=""
+	NE_HOST_IP[0]=""
+	NE_HOST_USER[0]=""
+	NE_STANDBY_IP[0]=""
+	NE_STANDBY_USER[0]=""
+	
+	if [ $# -ne 1 ]; then
+		install_log DEBUG LIB "Function get_ne_ip_list parameters count error."
+		return 1
+	fi
+	typeset ne_name="$1"
+	
+	#get ne index in selected net type
+	read_value "_selectedNETypeList2"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting _selectedNETypeList2 value failed."
+		return 1
+	fi
+	typeset all_ne_list="${RETURN[0]}"	
+	typeset ne_idx=`echo "${all_ne_list}" |
+		awk -F, -vne_name="${ne_name}" '
+		BEGIN{
+			ptn="^" ne_name "$";
+		}
+		{
+			for(i=1;i<=NF;i++)
+			{
+				if($i ~ ptn)
+				{
+					print i;
+					exit 0;
+				}
+			}
+			print 0
+		}' | sed "s/[ \t]//g"`
+	if [ ${ne_idx} -eq 0 ]; then
+		install_log DEBUG LIB "Getting ne index failed, maybe ne name dosen't exist in ne list."
+		return 1
+	fi
+	
+	#get ne ip list
+	read_value "_selectedNEIPList2"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting _selectedNEIPList2 value failed."
+		return 1
+	fi
+	typeset all_ne_ip_list="${RETURN[0]}"
+	typeset ne_ip_list=`echo "${all_ne_ip_list}" | awk -F, -vidx="${ne_idx}" '{ print $idx }'`
+	
+	NE_NODE_NUM=0
+	for ne_ip in `echo "${ne_ip_list}" | sed "s#|# #g"`
+	do
+		typeset tmp_dm_type=`echo "${ne_ip}" | awk -F: '{ print $1 }'`
+		typeset tmp_ip_str=`echo "${ne_ip}" | awk -F: '{ print $2 }'`
+		typeset tmp_host_str=""
+		typeset tmp_standby_str=""
+		typeset dm_type=""
+		if [ "X${tmp_dm_type}" = "Xsingle" ]; then
+			dm_type="single"
+		elif [ "X${tmp_dm_type}" = "Xhot" ]; then
+			dm_type="hotDualHost"
+		elif [ "X${tmp_dm_type}" = "Xcold" ]; then
+			dm_type="coldDualHost"
+		fi
+		NE_DM_TYPE[${NE_NODE_NUM}]="${dm_type}"
+		
+		if [ "X${dm_type}" = "Xsingle" ]; then
+			NE_HOST_IP[${NE_NODE_NUM}]=`echo "${tmp_ip_str}" | awk -F_ '{ print $1 }'`
+			NE_HOST_USER[${NE_NODE_NUM}]=`echo "${tmp_ip_str}" | awk -F_ '{ print substr($0,(length($1)+2),length($0)) }'`
+			NE_STANDBY_IP[${NE_NODE_NUM}]=""
+			NE_STANDBY_USER[${NE_NODE_NUM}]=""
+			NE_FLOAT_IP[${NE_NODE_NUM}]=""
+		elif [ "X${dm_type}" = "XhotDualHost" -o "X${dm_type}" = "XcoldDualHost" ]; then
+			NE_FLOAT_IP[${NE_NODE_NUM}]=`echo "${tmp_ip_str}" | awk -F/ '{ print $1 }'`
+			tmp_host_str=`echo "${tmp_ip_str}" | awk -F/ '{ print $2 }'`
+			tmp_standby_str=`echo "${tmp_ip_str}" | awk -F/ '{ print $3 }'`
+			NE_HOST_IP[${NE_NODE_NUM}]=`echo "${tmp_host_str}" | awk -F_ '{ print $1 }'`
+			NE_HOST_USER[${NE_NODE_NUM}]=`echo "${tmp_host_str}" | awk -F_ '{ print substr($0,(length($1)+2),length($0)) }'`
+			NE_STANDBY_IP[${NE_NODE_NUM}]=`echo "${tmp_standby_str}" | awk -F_ '{ print $1 }'`
+			NE_STANDBY_USER[${NE_NODE_NUM}]=`echo "${tmp_standby_str}" | awk -F_ '{ print $2 }'`
+		else
+			install_log DEBUG LIB "Getting ne info failed."
+			return 1
+		fi
+		
+		((NE_NODE_NUM=NE_NODE_NUM+1))
+	done
+	
+	return 0
+}
+
+################################################################################
+# name    : get_dm_type
+# describe: get dual host type
+# parameter list: null
+# output  :
+#         RETURN[0]    single,coldDualHost,hotDualHost
+# rerurn  : 0:success
+#         1:failed
+################################################################################
+function get_dm_type
+{
+	RETURN[0]=""
+
+	typeset dm_type=""
+	
+	read_value "_hostType"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting _hostType value failed."
+		return 1
+	fi
+	dm_type="${RETURN[0]}"
+	
+	if [ "X${dm_type}" != "Xsingle" ];then
+		read_value "_dualHostType"
+		if [ $? -ne 0 ]; then
+			install_log DEBUG LIB "Getting _dualHostType value failed."
+			return 1
+		fi
+		dm_type="${RETURN[0]}"
+	fi
+	
+	RETURN[0]="${dm_type}"
+	
+	return 0
+}
+
+################################################################################
+# name    : get_host_type
+# describe: get machine type in dual host
+# parameter list: null
+# output  :
+#         RETURN[0]    single, master,standby
+# rerurn  : 0:success
+#         1:failed
+################################################################################
+function get_host_type
+{
+    RETURN[0]=""
+	read_value "_hostType"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting _hostType value failed."
+		return 1
+	fi
+	
+	return 0
+}
+
+################################################################################
+# name    : get_host_ip
+# describe: get host ip in single or dual host
+# parameter list: null
+# output  :
+#         RETURN[0]    ip address of single host or master host in dual host
+# rerurn  : 0:success
+#         1:failed
+################################################################################
+function get_host_ip
+{
+
+	RETURN[0]=""
+	typeset host_ip=""
+	
+	if [ ! -f ${TMP}/localhost_ip ]; then
+		install_log "ERROR" "LIB" "Getting host ip address failed."
+		return 1
+	else
+		host_ip=$(cat ${TMP}/localhost_ip|grep "host_ip"|awk -F= '{print $2}' 2>&1)
+		if [ "x${host_ip}" = "x" ]; then
+			install_log "ERROR" "LIB" "Getting host ip address failed."
+			return 1
+		fi
+		
+		RETURN[0]="${host_ip}"
+	fi
+	
+	return 0
+}
+
+################################################################################
+# name    : get_standby_ip
+# describe: get standby ip in dual host
+# parameter list: null
+# output  :
+#         RETURN[0]    ip address of standby in dual host
+# rerurn  : 0:success
+#         1:failed
+################################################################################
+function get_standby_ip
+{
+    RETURN[0]=""
+	typeset host_ip=""
+	
+	get_host_type
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting host type failed."
+		return 1
+	fi
+	typeset host_type="${RETURN[0]}"
+
+	if [ "X${host_type}" = "Xsingle" ];then
+		install_log DEBUG LIB "Current host type is :$host_type,need not to to get standby ip ."
+		RETURN[0]=""
+		return 0
+	else
+		if [ ! -f ${TMP}/localhost_ip ]; then
+			install_log "ERROR" "LIB" "Getting host ip address failed."
+			return 1
+		else
+			host_ip=$(cat ${TMP}/localhost_ip|grep "standby_ip"|awk -F= '{print $2}' 2>&1)
+			if [ "x${host_ip}" = "x" ]; then
+				install_log "ERROR" "LIB" "Getting standby ip address failed."
+				return 1
+			fi
+			
+			RETURN[0]="${host_ip}"
+		fi
+	fi
+	
+	if [ "X${host_ip}" = "X" ]; then
+		install_log DEBUG LIB "Getting standby ip address failed."
+		return 1
+	fi
+
+	return 0
+}
+
+################################################################################
+# name    : get_float_ip
+# describe: get float ip of dual host
+# parameter list: null
+# output  :
+#         RETURN[0]    float ip address of dual host
+# rerurn  : 0:success
+#         1:failed
+################################################################################
+function get_float_ip
+{
+    RETURN[0]=""
+	
+    get_local_ne_list
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting local ne list failed."
+		return 1
+	fi
+	typeset ne_name="${RETURN[0]}"
+	
+	get_localhost_ip
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting localhost ip address failed."
+		return 1
+	fi
+	typeset localhost_ip="${RETURN[0]}"
+	
+	get_install_user
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting install user name failed."
+		return 1
+	fi
+	typeset user_name="${RETURN[0]}"
+		
+	get_ne_info "${ne_name}"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting ne info failed."
+		return 1
+	fi
+	
+	typeset float_ip=""
+	typeset idx=0
+	while [ ${idx} -lt ${NE_NODE_NUM} ]
+	do
+		if [ "X${NE_DM_TYPE[${idx}]}" = "Xsingle" ]; then
+			RETURN[0]=""
+			return 0
+		else	
+			if [ "X${NE_HOST_IP[${idx}]}" = "X${localhost_ip}" -a "X${NE_HOST_USER[${idx}]}" = "X${user_name}" ]; then
+				float_ip="${NE_FLOAT_IP[${idx}]}"
+				break			
+			elif [ "X${NE_STANDBY_IP[${idx}]}" = "X${localhost_ip}" -a "X${NE_STANDBY_USER[${idx}]}" = "X${user_name}" ]; then
+				float_ip="${NE_FLOAT_IP[${idx}]}"
+				break
+			fi
+		fi
+		
+		((idx=idx+1))
+	done
+	
+	if [ "X${float_ip}" = "X" ]; then
+		install_log DEBUG LIB "Getting float ip address failed."
+		return 1
+	fi
+	
+	RETURN[0]="${float_ip}"
+	
+	return 0
+}
+
+################################################################################
+# name    : get_ne_index
+# describe: get local host index in this ne.
+# parameter list:
+#           ne_name    ne name
+# output  :
+#         RETURN[0]    index of local host in this ne, range[0-n].
+# rerurn  : 0:success
+#         1:failed
+################################################################################
+function get_ne_index
+{
+	RETURN[0]=""
+	
+	if [ $# -ne 1 ]; then
+		install_log DEBUG LIB "Parameters count error."
+		return 1
+	fi
+	typeset ne_name="$1"
+	
+	get_localhost_ip
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting localhost ip address failed."
+		return 1
+	fi
+	typeset localhost_ip="${RETURN[0]}"
+	
+	get_install_user
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting install user name failed."
+		return 1
+	fi
+	typeset user_name="${RETURN[0]}"
+	
+	get_ne_info "${ne_name}"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting ne info failed."
+		return 1
+	fi
+	
+	typeset ne_idx=-1
+	typeset idx=0
+	while [ ${idx} -lt ${NE_NODE_NUM} ]
+	do
+		if [ "X${NE_HOST_IP[${idx}]}" = "X${localhost_ip}" -a "X${NE_HOST_USER[${idx}]}" = "X${user_name}" ]; then
+			ne_idx="${idx}"
+			break
+		elif [ "X${NE_STANDBY_IP[${idx}]}" = "X${localhost_ip}" -a "X${NE_STANDBY_USER[${idx}]}" = "X${user_name}" ]; then
+			ne_idx="${idx}"
+			break
+		fi
+	
+		((idx=idx+1))
+	done
+	
+	
+	if [ ${ne_idx} -lt 0 ]; then
+		install_log DEBUG LIB "Getting ne index failed."
+		return 1
+	fi
+	
+	RETURN[0]="${ne_idx}"
+	
+	return 0
+}
+
+################################################################################
+# name    : get_ne_install_node
+# describe: get ne install node.
+# parameter list:
+#           ne_name    ne name
+# output  :
+#         RETURN[0]    index of local host in this ne, range[0-n].
+# rerurn  : 0:success
+#         1:failed
+################################################################################
+function get_ne_install_node
+{
+	RETURN[0]=""
+	
+	if [ $# -ne 1 ]; then
+		install_log DEBUG LIB "Parameters count error."
+		return 1
+	fi
+	typeset ne_name="$1"
+	
+	get_localhost_ip
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting localhost ip address failed."
+		return 1
+	fi
+	typeset localhost_ip="${RETURN[0]}"
+	
+	get_install_user
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting install user name failed."
+		return 1
+	fi
+	typeset user_name="${RETURN[0]}"
+
+	read_value "_selectedNETypeList"
+	if [ $? -ne 0 ];then
+		install_log DEBUG COMMONLIB "Getting _selectedNETypeList failed"
+		return 1 
+	fi
+	typeset ne_list="${RETURN[0]}"
+	
+	typeset ne_idx=0
+	ne_idx=$(echo ${ne_list} | awk -F, -vne_name=${ne_name} '{ for (i = 1; i <= NF; i++) if ($i == ne_name) print i}')
+	
+	read_value "_selectedNEIPList"
+	if [ $? -ne 0 ];then
+		install_log DEBUG COMMONLIB "Getting _selectedNETypeList failed"
+		return 1 
+	fi
+	typeset ip_list="${RETURN[0]}"
+
+	ne_ip_list=$(echo ${ip_list} | awk -F, -vne_idx=${ne_idx} '{print $ne_idx }' | sed 's/|/ /g')
+
+	typeset i=0
+	for ne_ip in $ne_ip_list
+	do
+		((i=i+1))
+		if [ "${ne_ip}" = "${localhost_ip}_${user_name}" ];then
+			RETURN[0]="${i}"
+			break
+		fi
+	done
+	
+	if [ ${i} -lt 0 ]; then
+		install_log DEBUG LIB "Getting ne index failed."
+		return 1
+	fi
+		
+	return 0
+}
+################################################################################
+# name    : get_node_index
+# describe: get local host node index in this ne, regard dual host as two single
+#           node.
+# parameter list:
+#           ne_name    ne name
+# output  :
+#         RETURN[0]    node index of local host in this ne, range[0-n].
+# rerurn  : 0:success
+#         1:failed
+################################################################################
+function get_node_index
+{
+	RETURN[0]=""
+	
+	if [ $# -ne 1 ]; then
+		install_log DEBUG LIB "Parameters count error."
+		return 1
+	fi
+	typeset ne_name="$1"
+	
+	get_localhost_ip
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting localhost ip address failed."
+		return 1
+	fi
+	typeset localhost_ip="${RETURN[0]}"
+	
+	get_install_user
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting install user name failed."
+		return 1
+	fi
+	typeset user_name="${RETURN[0]}"
+	
+	get_ne_info "${ne_name}"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting ne info failed."
+		return 1
+	fi
+	
+	typeset ne_idx=0
+	typeset idx=0
+	typeset matched="0"
+	while [ ${idx} -lt ${NE_NODE_NUM} ]
+	do
+		if [ "X${NE_HOST_IP[${idx}]}" = "X${localhost_ip}" -a "X${NE_HOST_USER[${idx}]}" = "X${user_name}" ]; then
+			((ne_idx=ne_idx+1))
+			matched="1"
+			break
+		elif [ "X${NE_STANDBY_IP[${idx}]}" = "X${localhost_ip}" -a "X${NE_STANDBY_USER[${idx}]}" = "X${user_name}" ]; then
+			((ne_idx=ne_idx+2))
+			matched="1"
+			break
+		fi
+		
+		if [ "X${NE_DM_TYPE[${idx}]}" = "Xsingle" ]; then
+			((ne_idx=ne_idx+1))
+		else
+			((ne_idx=ne_idx+2))
+		fi
+	
+		((idx=idx+1))
+	done
+	
+	
+	if [ ${matched} -eq 0 ]; then
+		install_log DEBUG LIB "Getting node index failed."
+		return 1
+	fi
+	
+	RETURN[0]=`expr ${ne_idx} - 1`
+	
+	return 0
+}
+
+################################################################################
+# name    : get_selected_net_type
+# describe: get select net type name.
+# parameter list:
+#           null
+# output  :
+#         RETURN[0]    select net type name.
+# rerurn  : 0:success
+#         1:failed
+################################################################################
+function get_selected_net_type
+{
+	RETURN[0]=""
+	
+	read_value "_selectedNetType"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG "LIB" "Getting local net type list failed."
+		return 1
+	fi
+	
+	return 0
+}
+
+################################################################################
+# name    : get_ne_size
+# describe: get size of specified ne.
+# parameter list:
+#           ne_name        ne name.
+# output  :
+#         RETURN[0]    size of ne.
+# rerurn  : 0:success
+#         1:failed
+################################################################################
+function get_ne_size
+{
+	RETURN[0]=""
+	
+	if [ $# -ne 1 ]; then
+		install_log DEBUG LIB "Parameters count error."
+		return 1
+	fi
+	typeset ne_name="$1"
+	
+	get_localhost_ip
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting localhost ip address failed."
+		return 1
+	fi
+	typeset localhost_ip="${RETURN[0]}"
+	
+	get_install_user
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting install user name failed."
+		return 1
+	fi
+	typeset user_name="${RETURN[0]}"
+	
+	get_ne_info "${ne_name}"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting ne info failed."
+		return 1
+	fi
+	
+	RETURN[0]="${NE_NODE_NUM}"
+	
+	return 0
+}
+
+################################################################################
+# name    : get_ne_list
+# describe: get ne list of select net type.
+# parameter list:
+#           null
+# output  :
+#         RETNUM       size of ne list.
+#         RETURN[0-n]    ne name.
+# rerurn  : 0:success
+#         1:failed
+################################################################################
+function get_ne_list
+{
+	RETNUM=0
+	RETURN[0]=""
+	read_value "_selectedNETypeList2"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting ne list in select net type failed."
+		return 1
+	fi
+	typeset ne_list_str="${RETURN[0]}"
+	
+	typeset ne_list=`echo "${ne_list_str}" | sed -e "s/,/ /g"`
+	
+	RETNUM=0
+    typeset ne_name=""
+	for ne_name in ${ne_list}
+	do
+		RETURN[${RETNUM}]="${ne_name}"
+		((RETNUM=RETNUM+1))
+	done
+	
+	return 0
+}
+
+################################################################################
+# name    : get_install_ne_list
+# describe: get ne list of install net type.
+# parameter list:
+#           null
+# output  :
+#         RETNUM       size of ne list.
+#         RETURN[0-n]    ne name.
+# rerurn  : 0:success
+#         1:failed
+################################################################################
+function get_install_ne_list
+{
+	RETNUM=0
+	RETURN[0]=""
+	read_value "_selectedNETypeListAll"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting install ne list failed."
+		return 1
+	fi
+	typeset ne_list_str="${RETURN[0]}"
+	
+	typeset ne_list=`echo "${ne_list_str}" | sed -e "s/,/ /g"`
+	
+	RETNUM=0
+    typeset ne_name=""
+	for ne_name in ${ne_list}
+	do
+		RETURN[${RETNUM}]="${ne_name}"
+		((RETNUM=RETNUM+1))
+	done
+	
+	return 0
+}
+
+################################################################################
+# name    : get_localmachine_ne_list
+# describe: get ne list install in local physical machine.
+# parameter list:
+#           null
+# output  :
+#         RETNUM       size of ne list.
+#         RETURN[0-n]    ne name.
+# rerurn  : 0:success
+#         1:failed
+################################################################################
+function get_localmachine_ne_list
+{
+	RETNUM=0
+	RETURN[0]=""
+	read_value "_localMachineNEList"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting ne list in localmachine failed."
+		return 1
+	fi
+	typeset all_ne_list_str="${RETURN[0]}"
+	
+	read_value "_hostip"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "read_value _hostip failed."
+		return 1
+	fi
+	typeset local_ip="${RETURN[0]}"
+	
+	typeset ne_list_str=`echo "${all_ne_list_str}" | awk -F, '{ for(i=1;i<=NF;i++) { print $i; } }' | awk -F: -vlocal_ip="${local_ip}" '{ if($1 ~ local_ip) { print $2; } }'`
+	
+	typeset ne_list=`echo "${ne_list_str}" | sed -e "s#/# #g"`
+	
+	RETNUM=0
+    typeset ne_name=""
+	for ne_name in ${ne_list}
+	do
+		RETURN[${RETNUM}]="${ne_name}"
+		((RETNUM=RETNUM+1))
+	done
+	
+	return 0
+}
+
+################################################################################
+# name    : get_up_localmachine_ne_list
+# describe: get up ne list install in local physical machine.
+# parameter list:
+#           null
+# output  :
+#         RETNUM       size of ne list.
+#         RETURN[0-n]    ne name.
+# rerurn  : 0:success
+#         1:failed
+################################################################################
+function get_up_localmachine_ne_list
+{
+	RETNUM=0
+	RETURN[0]=""
+	up_install_flag=$(awk -F"=" '{if($1~/_selectedUPTypeList/)print $2}' ${IDEPLOY_PKG_PATH}/conf/config.properties)
+	if [ "X{up_install_flag}" != "X" ];then
+		read_value "_selectedUPTypeList"
+		if [ $? -ne 0 ]; then
+			install_log DEBUG LIB "Getting ne list in localmachine failed."
+			return 1
+		fi
+		typeset all_ne_list_str="${RETURN[0]}"
+		
+		read_value "_hostip"
+		if [ $? -ne 0 ]; then
+			install_log DEBUG LIB "read_value _hostip failed."
+			return 1
+		fi
+		typeset local_ip="${RETURN[0]}"
+		
+		typeset ne_list_str=`echo "${all_ne_list_str}" | awk -F, '{ for(i=1;i<=NF;i++) { print $i; } }' | awk -F: -vlocal_ip="${local_ip}" '{ if($1 ~ local_ip) { print $2; } }'`
+		
+		typeset ne_list=`echo "${ne_list_str}" | sed -e "s#/# #g"`
+		
+		RETNUM=0
+		typeset ne_name=""
+		for ne_name in ${ne_list}
+		do
+			RETURN[${RETNUM}]="${ne_name}"
+			((RETNUM=RETNUM+1))
+		done
+	fi
+	return 0
+}
+################################################################################
+# name    : up_ne_is_existed
+# describe: get up ne list install in local physical machine.
+# parameter list:
+#           null
+# output  :
+#         yes.
+#         no.
+# rerurn  : 0:success
+#         1:failed
+################################################################################
+function up_ne_is_existed
+{
+	RETURN[0]="no"
+	typeset ne_key=$1
+	up_install_flag=$(awk -F"=" '{if($1~/_selectedUPTypeList/)print $2}' ${IDEPLOY_PKG_PATH}/conf/config.properties)
+	if [ "X{up_install_flag}" != "X" ];then
+		read_value "_selectedUPTypeList"
+		if [ $? -ne 0 ]; then
+			install_log DEBUG LIB "Getting ne list in localmachine failed."
+			return 1
+		fi
+		typeset all_ne_list_str="${RETURN[0]}"
+		
+		read_value "_hostip"
+		if [ $? -ne 0 ]; then
+			install_log DEBUG LIB "read_value _hostip failed."
+			return 1
+		fi
+		typeset local_ip="${RETURN[0]}"
+		
+		typeset ne_list_str=`echo "${all_ne_list_str}" | awk -F, '{ for(i=1;i<=NF;i++) { print $i; } }' | awk -F: -vlocal_ip="${local_ip}" '{ if($1 ~ local_ip) { print $2; } }'`
+		
+		typeset ne_list=`echo "${ne_list_str}" | sed -e "s#/# #g"`
+		
+		typeset ne_name=""
+		for ne_name in ${ne_list}
+		do
+			if [ "X${ne_name}" = "X${ne_key}" ];then
+				RETURN[0]="yes"
+				break
+			fi	
+		done
+	fi
+	return 0
+}
+################################################################################
+# name    : get_float_ip_index
+# describe: get index of current float ip address.
+# parameter list:
+#           $1    float ip of current ne
+# output  :
+#         RETURN[0]    index
+# rerurn  : 0:success
+#         1:failed
+################################################################################
+function get_float_ip_index
+{
+	RETURN[0]=""
+	install_log DEBUG LIB "Parameters: [$@]."
+	if [ $# -ne 1 ]; then
+		install_log DEBUG LIB "Parameters count of function get_float_ip_index error."
+		return 1
+	fi
+	typeset float_ip="$1"
+	
+	read_value "_selectedNEFloatIPList"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting value of: _selectedNEFloatIPList failed."
+		return 1
+	fi
+	typeset float_ip_list_str="${RETURN[0]}"
+	typeset rtn=`echo "${float_ip_list_str}" | awk -F, -vfloat_ip="${float_ip}" '{ for(i=1;i<=NF;i++) { if($i ~ float_ip) { print i-1; exit 0; } } }'`
+	
+	if [ "X${rtn}" = "X" ]; then
+		install_log DEBUG LIB "Float ip: ${float_ip} dosen't exist in all float ip list: [${float_ip_list_str}]."
+		return 1
+	fi
+	RETURN[0]=${rtn}
+	
+	return 0
+}
+
+################################################################################
+# name    : get_single_ne_index
+# describe: get index of current ne.
+# parameter list:
+#           $1    ne name
+# output  :
+#         RETURN[0]    index
+# rerurn  : 0:success
+#         1:failed
+################################################################################
+function get_single_ne_index
+{
+	RETURN[0]=""
+	install_log DEBUG LIB "Parameters: [$@]."
+	if [ $# -ne 1 ]; then
+		install_log DEBUG LIB "Parameters count of function get_single_ne_index error."
+		return 1
+	fi
+	typeset ne_name="$1"
+	
+	read_value "_selectedNETypeList"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting value of: _selectedNETypeList failed."
+		return 1
+	fi
+	typeset ne_list_str="${RETURN[0]}"
+	typeset rtn=`echo "${ne_list_str}" | awk -F, -vne_name="${ne_name}" '{ for(i=1;i<=NF;i++) { if($i ~ ne_name) { print i-1; exit 0; } } }'`
+	
+	if [ "X${rtn}" = "X" ]; then
+		install_log DEBUG LIB "${ne_name} dosen't exist in all ne list: [${ne_list_str}]."
+		return 1
+	fi
+	RETURN[0]=${rtn}
+	
+	return 0
+}
+
+################################################################################
+# name    : get_ne_index_in_localmachine
+# describe: get specify ne index of all ne in physical machine. 
+# parameter list:
+#           $1    ne name
+# output  :
+#         RETURN[0]    index
+# rerurn  : 0:success
+#         1:failed
+################################################################################
+function get_ne_index_in_localmachine
+{
+	RETURN[0]=""
+	install_log DEBUG LIB "Parameters: [$@]."
+	if [ $# -ne 1 ]; then
+		install_log DEBUG LIB "Parameters count of function get_ne_index_in_localmachine error."
+		return 1
+	fi
+	typeset ne_name="$1"
+	
+	get_localmachine_ne_list
+	typeset idx=0
+	while [ ${idx} -lt ${RETNUM} ]
+	do
+		if [ "X${RETURN[${idx}]}" = "X${ne_name}" ]; then
+			RETURN[0]="${idx}"
+			return 0
+		fi
+		((idx=idx+1))
+	done
+	
+	install_log DEBUG LIB "Can't find specify ne: ${ne_name} in localmachine ne list."
+	RETURN[0]="-1"
+	return 1
+}
+################################################################################
+# name    : get_net_struc_business_type
+# describe  : get business type of current net structure
+# parameters: null
+# output    : RETURN[0] business type, in [dsdp | platform | sdpall| pms | ... ]
+#             in the future, we will support more business type.
+# rerurn  : 0 succ, 1 failure
+###############################################################################
+function get_net_struc_business_type
+{
+	get_selected_net_type
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting net structure type failed."
+		RETURN[0]=""
+		return 1
+	fi
+	typeset net_struc="${RETURN[0]}"
+	typeset sec_count=$(echo "${net_struc}" | awk -F_ '{ print NF; }')
+	typeset idx=$(expr ${sec_count} - 1)
+	
+	# net structure name standard: business-type_capacity-type, and the kernel
+	# config file name is : net_structure_name.ini
+	RETURN[0]=$(echo "${net_struc}" | cut -d_ -f1-${idx})
+	return 0
+}
+
+################################################################################
+# name    : get_net_struc_capacity_type
+# describe  : get capacity type of current net structure
+# parameters: null
+# output    : RETURN[0] capacity type, in [minimal | small | medium | huge ]
+# rerurn  : 0 succ, 1 failure
+###############################################################################
+function get_net_struc_capacity_type
+{
+	get_selected_net_type
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting net structure type failed."
+		RETURN[0]=""
+		return 1
+	fi
+	typeset net_struc="${RETURN[0]}"
+	typeset sec_count=$(echo "${net_struc}" | awk -F_ '{ print NF; }')
+	
+	# net structure name standard: business-type_capacity-type, and the kernel
+	# config file name is : net_structure_name.ini
+	RETURN[0]=$(echo "${net_struc}" | cut -d_ -f${sec_count})
+	return 0
+}
+
+################################################################################
+# name    : get_local_first_dualhost_ne_name
+# describe  : get local first dualhost NE name
+# parameters: null
+# output    : RETURN[0] ne name
+# rerurn  : 0 succ, 1 failure
+###############################################################################
+function get_local_first_dualhost_ne_name
+{
+	typeset local_ne_name_list[0]=""
+	typeset local_ne_name_num=""
+	get_localmachine_ne_list
+	if [ $? -ne 0 ]
+	then 
+		install_log ERROR LIB "Getting local host NE list failed."
+		return 1 
+	fi
+	
+	typeset idx=0
+	typeset local_ne_name_num=${RETNUM}
+	while [ ${idx} -lt ${local_ne_name_num} ]
+	do
+		local_ne_name_list[${idx}]=${RETURN[${idx}]}
+		((idx=idx+1))
+	done 
+		
+	typeset ne_name=$(echo ${local_ne_name_list} | awk '{print $1}')
+	
+	
+	idx=0
+	while [ ${idx} -lt ${local_ne_name_num} ]
+	do 
+		get_ne_info "${local_ne_name_list[${idx}]}"
+		if [ $? -ne 0 ]
+		then
+			install_log ERROR LIB "Getting NE information of \"${local_ne_name_list[${idx}]}\" failed."
+			return 1 
+		fi
+		typeset ne_idx=0 
+		
+	
+		while [ ${ne_idx} -lt ${NE_NODE_NUM} ] 
+		do
+			if [ "x${NE_DM_TYPE[${ne_idx}]}" != "xsingle" ]; then
+				RETURN[0]=${local_ne_name_list[${idx}]}
+				return 0
+			fi
+			
+			((ne_idx=ne_idx+1))
+		done 	
+		
+		((idx=idx+1))
+	done
+	
+	install_log ERROR LIB "The ne list of local machine are all single."
+	return 1 
+}
+
+################################################################################
+# name    : get_local_first_ne_flag
+# describe  : get local first ne flag,to void do several times in same machine
+# parameters: null
+# output    : RETURN[0] 1: contain first ne name; 0: not contain first ne name
+# rerurn  : 0 succ, 1 failure
+###############################################################################
+function get_local_first_ne_flag
+{
+	get_localmachine_ne_list
+	if [ $? -ne 0 ]; then
+		install_log ERROR LIB "Getting first dualhost in local machine failed."
+		return 1
+	fi
+	typeset first_ne_name="${RETURN[0]}"
+	get_local_ne_list
+	if [ $? -ne 0 ]; then
+		install_log "ERROR" "LIB" "Getting ne list installed in localhost failed."
+		return 1
+	fi
+	typeset idx=0
+	while [ ${idx} -lt ${RETNUM} ]
+	do
+		if [ "x${RETURN[${idx}]}" = "x${first_ne_name}" ]; then
+			install_log DEBUG LIB "local install user contains first ne"
+			RETURN[0]=1
+			return 0
+		fi
+		((idx=idx+1))
+	done
+	RETURN[0]=0
+	install_log DEBUG LIB "local install user does not contain first ne"
+	return 0
+	
+}
+
+################################################################################
+# name    : get_all_ip
+# describe  : get all ne ip,include oracle, fabric/base/back ip
+# parameters: null
+# output    : RETURN[0]: ip list
+# rerurn  : 0 succ, 1 failure
+###############################################################################
+function get_all_ip
+{
+	typeset ip_list=""
+	
+	get_ne_list
+	if [ $? -ne 0 ];then
+		install_log ERROR LIB "get ne info failed "
+		return 1
+	fi
+	ne_count="${RETNUM}"
+	
+	typeset ne_index=0
+	while [ ${ne_index} -lt ${ne_count} ]
+	do
+		typeset ne_name[${ne_index}]="${RETURN[${ne_index}]}"
+		((ne_index=ne_index+1))
+	done
+	
+	#get ne ip:host ip,standby ip,float ip
+	typeset ip_list=""
+	ne_index=0		
+	while [ ${ne_index} -lt ${ne_count} ]
+	do
+		get_ne_info "${ne_name[$ne_index]}"
+		if [ $? -ne 0 ]; then
+			install_log ERROR LIB "get ne of ${ne_name[$ne_index]} info failed. "
+			return 1
+		fi
+		typeset comp_num=${NE_NODE_NUM}
+		
+		typeset comp_index=0
+		while [ $comp_index -lt $comp_num ]
+		do
+			typeset host_ip="${NE_HOST_IP[$comp_index]}"
+			typeset standby_ip="${NE_STANDBY_IP[$comp_index]}"
+			typeset float_ip="${NE_FLOAT_IP[$comp_index]}"
+			if [ "x${ip_list}" = "x" ]; then
+				ip_list="'${host_ip}'"
+			else	
+				typeset is_ip_exist=$(echo ${ip_list}|grep -w "${host_ip}")
+				if [ "x${is_ip_exist}" = "x" ]; then
+					ip_list="${ip_list},'${host_ip}'"
+				fi
+				
+				if [ "x${standby_ip}" != "x" ]; then
+					is_ip_exist=$(echo ${ip_list}|grep -w "${standby_ip}")
+					if [ "x${is_ip_exist}" = "x" ]; then
+						ip_list="${ip_list},'${standby_ip}'"
+					fi	
+				fi
+				
+				if [ "x${float_ip}" != "x" ]; then
+					is_ip_exist=$(echo ${ip_list}|grep -w "${float_ip}")
+					if [ "x${is_ip_exist}" = "x" ]; then
+						ip_list="${ip_list},'${float_ip}'"
+					fi	
+				fi
+			fi
+			
+			((comp_index=comp_index+1))
+		done
+		((ne_index=ne_index+1))
+	done
+	
+	read_value "db_oracle_sys_ip" "iDeploy_True" 
+	if [ $? -ne 0 ]
+	then
+		install_log "DEBUG" "LIB" "${log_prefix} read db_oracle_sys_ip error ."
+		install_log "ERROR" "LIB" "Getting db_oracle_sys_ip failed."
+		return 1
+	fi
+	typeset act_db_ip="${RETURN[0]}"
+	
+	if [ "x${act_db_ip}" != "x" ]; then
+		is_ip_exist=$(echo ${ip_list}|grep -w "${act_db_ip}")
+		if [ "x${is_ip_exist}" = "x" ]; then
+			ip_list="${ip_list},'${act_db_ip}'"
+		fi
+	fi
+	
+	read_value "db_oracle_sys_standby_ip" "iDeploy_True" 
+	if [ $? -ne 0 ]
+	then
+		install_log "DEBUG" "LIB" "${log_prefix} read db_oracle_sys_standby_ip error ."
+		install_log "ERROR" "LIB" "Getting db_oracle_sys_standby_ip failed."
+		return 1
+	fi
+	typeset db_standby_ip="${RETURN[0]}"
+	
+	if [ "x${db_standby_ip}" != "x" ]; then
+		is_ip_exist=$(echo ${ip_list}|grep -w "${db_standby_ip}")
+		if [ "x${is_ip_exist}" = "x" ]; then
+			ip_list="${ip_list},'${db_standby_ip}'"
+		fi
+	fi
+	
+	#base ip
+	read_value "base_switch"
+	if [ $? -ne 0 ]; then
+		install_log "ERROR" "LIB" "read value base_switch failed."
+		return 1
+	fi
+	typeset base_switch="${RETURN[0]}"
+	
+	if [ "x${base_switch}" != "x0" ]; then
+		base_ip_key="slb om"
+		for key in ${base_ip_key}
+		do		
+			read_value "base_${key}_ip"
+			if [ $? -ne 0 ]; then
+				install_log "ERROR" "LIB" "read value base_${key}_ip failed."
+				return 1
+			fi
+			typeset base_ip="${RETURN[0]}"
+			
+			is_ip_exist=$(echo ${ip_list}|grep -w "${base_ip}")
+			if [ "x${is_ip_exist}" = "x" ]; then
+				ip_list="${ip_list},'${base_ip}'"
+			fi
+		done
+		
+		get_up_all_ne
+		if [ $? -ne 0 ]; then
+			install_log "ERROR" "LIB" "execute function get_up_all_ne failed."
+			return 1
+		fi
+		typeset up_all_ne_name="${RETURN[0]}"
+		
+		for up_ne in ${up_all_ne_name}
+		do
+			read_value "${up_ne}_info.size"
+			if [ $? -ne 0 ]; then
+				install_log "ERROR" "LIB" "read value cgw1_info.size failed."
+				return 1
+			fi
+			base_up_size=${RETURN[0]}
+			
+			typeset base_index=0
+			while [ $base_index -lt ${base_up_size} ]
+			do
+				read_value "${up_ne}_info.${base_index}.base_${up_ne}_ip"
+				if [ $? -ne 0 ]; then
+					install_log "ERROR" "LIB" "read value ${up_ne}_info.${base_index}.base_${up_ne}_ip failed."
+					return 1
+				fi
+				base_ip="${RETURN[0]}"
+				
+				is_ip_exist=$(echo ${ip_list}|grep -w "${base_ip}")
+				if [ "x${is_ip_exist}" = "x" ]; then
+					ip_list="${ip_list},'${base_ip}'"
+				fi
+				
+				((base_index=base_index+1))
+			done
+		done
+	fi
+	
+	
+	#get install ip
+	get_install_all_ip
+	if [ $? -ne 0 ]; then
+		install_log "ERROR" "LIB" "get install all ip failed."
+		return 1	
+	fi
+	typeset install_all_ip="${RETURN[0]}"
+	
+	for key_ip in ${install_all_ip}
+	do
+		is_ip_exist=$(echo ${ip_list}|grep -w "${key_ip}")
+		if [ "x${is_ip_exist}" = "x" ]; then
+			ip_list="${ip_list},'${key_ip}'"
+		fi		
+	done
+	
+	read_value "onesdp_db_auth_ip.size"
+	if [ $? -ne 0 ]; then
+		install_log "ERROR" "LIB" "read value onesdp_db_auth_ip.size failed."
+		return 1
+	fi
+	onesdp_db_auth_ip_size=${RETURN[0]}	
+	
+	typeset auth_idx=0
+	while [ ${auth_idx} -lt ${onesdp_db_auth_ip_size} ]
+	do
+		read_value "onesdp_db_auth_ip.${auth_idx}"
+		if [ $? -ne 0 ]; then
+			install_log "ERROR" "LIB" "read value onesdp_db_auth_ip.${auth_idx} failed."
+			return 1
+		fi
+		onesdp_db_auth_ip="${RETURN[0]}"
+		
+		is_ip_exist=$(echo ${ip_list}|grep -w "${onesdp_db_auth_ip}")
+		if [ "x${is_ip_exist}" = "x" ]; then
+			ip_list="${ip_list},'${onesdp_db_auth_ip}'"
+		fi
+		
+		((auth_idx=auth_idx+1))
+	done
+	
+	RETURN[0]="${ip_list}"
+	
+	return 0
+}
+
+################################################################################
+# name    : get_local_machine_float_ip
+# describe  : get local machine float ip include physical fabric ip and base ip
+# parameters: null
+# output    : RETURN[0]: ip list
+# rerurn  : 0 succ, 1 failure
+###############################################################################
+function get_local_machine_float_ip
+{
+	typeset ip_list=""
+	
+	get_localmachine_ne_list
+	if [ $? -ne 0 ];then
+		install_log ERROR LIB "get ne info failed "
+		return 1
+	fi
+	ne_count="${RETNUM}"
+	
+	typeset ne_index=0
+	while [ ${ne_index} -lt ${ne_count} ]
+	do
+		typeset ne_name[${ne_index}]="${RETURN[${ne_index}]}"
+		((ne_index=ne_index+1))
+	done
+	
+	#get ne ip:host ip,standby ip,float ip
+	typeset ip_list=""
+	ne_index=0		
+	while [ ${ne_index} -lt ${ne_count} ]
+	do
+		get_ne_info "${ne_name[$ne_index]}"
+		if [ $? -ne 0 ]; then
+			install_log ERROR LIB "get ne of ${ne_name[$ne_index]} info failed. "
+			return 1
+		fi
+		typeset comp_num=${NE_NODE_NUM}
+		
+		typeset comp_index=0
+		while [ $comp_index -lt $comp_num ]
+		do
+			#typeset host_ip="${NE_HOST_IP[$comp_index]}"
+			#typeset standby_ip="${NE_STANDBY_IP[$comp_index]}"
+			typeset float_ip="${NE_FLOAT_IP[$comp_index]}"
+			if [ "x${ip_list}" = "x" ]; then
+				ip_list="${float_ip}"
+			else
+				if [ "x${float_ip}" != "x" ]; then
+					is_ip_exist=$(echo ${ip_list}|grep -w "${float_ip}")
+					if [ "x${is_ip_exist}" = "x" ]; then
+						ip_list="${ip_list} ${float_ip}"
+					fi	
+				fi
+			fi
+			
+			((comp_index=comp_index+1))
+		done
+		((ne_index=ne_index+1))
+	done
+	
+	RETURN[0]="${ip_list}"
+	
+	install_log "DEBUG" "CHECK_ENV" "ip_list=${ip_list}."
+	
+	return 0
+}
+
+
+################################################################################
+# name    : get_base_ip
+# describe  : get current ne base ip
+# parameter list:
+#           $1    current ne name
+# output  :
+#         RETNUM       	size of base ip list.
+#         RETURN[0-n]    ne base ip.
+#         RETURN_CARD    ne base network card.
+#         RETURN_NETMASK    ne base netmask.
+# rerurn  : 0 succ, 1 failure
+###############################################################################
+function get_base_ip
+{
+	ne_name="$1"
+	#get base card
+	read_value "base_network_card"
+	if [ $? -ne 0 ];then
+		install_log "ERROR" "LIB" "read value base_network_card failed."
+		return 1
+	fi
+	typeset base_network_card="${RETURN[0]}"
+	RETURN_CARD=${base_network_card}
+
+	get_host_type
+	if [ $? -ne 0 ]; then
+		install_log "DEBUG" "LIB" "get host type failed."
+		return 1	
+	fi
+	typeset local_type="${RETURN[0]}"
+	
+	if [ "x${local_type}" != "xsingle" ]; then
+		#get base netmask
+		#read_value "base_subnet_mask"
+		#if [ $? -ne 0 ];then
+		#	install_log "ERROR" "LIB" "read value base_subnet_mask failed."
+		#	return 1
+		#fi
+		#typeset base_subnet_mask="${RETURN[0]}"
+		
+		
+		typeset base_subnet_mask=""
+	
+		nic_num=$(ifconfig | sed -n "/${base_network_card} /=")
+		base_subnet_mask=$(ifconfig | sed -n "${nic_num},/Bcast/p" | grep "Bcast" | awk '{print $4}'|awk -F: '{print $2}')
+		if [ $? -ne 0 ]
+		then
+			install_log ERROR LIB "Getting the base subnetmask failed."
+			return 1
+		else
+			install_log DEBUG LIB "the base nic ${base_network_card} subnetmask is ${base_subnet_mask}."
+		fi
+		
+		RETURN_NETMASK=${base_subnet_mask}
+	fi
+	
+	#get base ip
+	RETNUM=1
+	case ${ne_name} in
+		MDMC_ALL)
+			read_value "base_mc_ip"
+			if [ $? -ne 0 ];then
+				install_log "ERROR" "LIB" "read value base_mc_ip failed."
+				return 1
+			fi
+			typeset base_ip="${RETURN[0]}"
+			NE_HOST_BASE_IP[0]=${base_ip}
+			RETURN[0]=${base_ip}
+			
+			;;
+			
+		MI|OM|APACHE)
+			key=$(echo "${ne_name}" | tr 'A-Z' 'a-z')
+			read_value "base_${key}_ip"
+			if [ $? -ne 0 ];then
+				install_log "ERROR" "LIB" "read value base_${key}_ip failed."
+				return 1
+			fi
+			typeset base_ip="${RETURN[0]}"
+			NE_HOST_BASE_IP[0]=${base_ip}
+			RETURN[0]=${base_ip}
+			
+			;;
+		SIS)
+			read_value "sis_info.size"
+			if [ $? -ne 0 ]; then
+				install_log "ERROR" "LIB" "read value sis_info.size failed."
+				return 1
+			fi
+			base_up_size=${RETURN[0]}
+			RETNUM=${base_up_size}
+			
+			typeset base_index=0
+			while [ $base_index -lt $base_up_size ]
+			do
+				read_value "sis_info.${base_index}.base_sis_ip"
+				if [ $? -ne 0 ]; then
+					install_log "ERROR" "LIB" "read value sis_info.${base_index}.base_sis_ip failed."
+					return 1
+				fi
+				base_ip="${RETURN[0]}"
+				RETURN[${base_index}]=${base_ip}
+				NE_HOST_BASE_IP[$base_index]=${base_ip}
+				
+				((base_index=base_index+1))
+			done
+			
+		;;
+		CGW)
+			read_value "cgw1_info.size"
+			if [ $? -ne 0 ]; then
+				install_log "ERROR" "LIB" "read value cgw1_info.size failed."
+				return 1
+			fi
+			base_cgw_size=${RETURN[0]}
+			
+			RETNUM=${base_cgw_size}
+
+			typeset base_index=0
+			while [ $base_index -lt $base_cgw_size ]
+			do
+				read_value "cgw1_info.${base_index}.base_cgw1_ip"
+				if [ $? -ne 0 ]; then
+					install_log "ERROR" "LIB" "read value cgw1_info.${base_index}.base_cgw1_ip failed."
+					return 1
+				fi
+				base_ip="${RETURN[0]}"
+				RETURN[${base_index}]=${base_ip}
+				NE_HOST_BASE_IP[$base_index]=${base_ip}
+				
+				if [ "x${local_type}" != "xsingle" ]; then
+					read_value "cgw1_info.${base_index}.base_host_cgw1_ip"
+					if [ $? -ne 0 ]; then
+						install_log "ERROR" "LIB" "read value cgw1_info.${base_index}.base_host_cgw1_ip failed."
+						return 1
+					fi
+					NE_HOST_BASE_IP[$base_index]=${RETURN[0]}
+
+					read_value "cgw1_info.${base_index}.base_standby_cgw1_ip"
+					if [ $? -ne 0 ]; then
+						install_log "ERROR" "LIB" "read value cgw1_info.${base_index}.base_standby_cgw1_ip failed."
+						return 1
+					fi
+					NE_STANDBY_BASE_IP[$base_index]=${RETURN[0]}
+				fi
+				
+				((base_index=base_index+1))
+			done
+			;;
+		
+		Charging_with_Dccproxy)
+			read_value "chg_info.size"
+			if [ $? -ne 0 ]; then
+				install_log "ERROR" "LIB" "read value chg_info.size failed."
+				return 1
+			fi
+			base_cbe_size=${RETURN[0]}
+			
+			RETNUM=${base_cbe_size}
+			base_index=0
+			while [ $base_index -lt $base_cbe_size ]
+			do
+				read_value "chg_info.${base_index}.base_chg_ip"
+				if [ $? -ne 0 ]; then
+					install_log "ERROR" "LIB" "read value chg_info.${base_index}.base_chg_ip failed."
+					return 1
+				fi
+				typeset base_ip="${RETURN[0]}"
+				RETURN[${base_index}]=${base_ip}
+				NE_HOST_BASE_IP[$base_index]=${base_ip}
+				
+				if [ "x${local_type}" != "xsingle" ]; then
+					read_value "chg_info.${base_index}.base_host_chg_ip"
+					if [ $? -ne 0 ]; then
+						install_log "ERROR" "LIB" "read value chg_info.${base_index}.base_host_chg_ip failed."
+						return 1
+					fi
+					NE_HOST_BASE_IP[$base_index]=${RETURN[0]}
+
+					read_value "chg_info.${base_index}.base_standby_chg_ip"
+					if [ $? -ne 0 ]; then
+						install_log "ERROR" "LIB" "read value chg_info.${base_index}.base_standby_chg_ip failed."
+						return 1
+					fi
+					NE_STANDBY_BASE_IP[$base_index]=${RETURN[0]}
+				fi
+				
+				((base_index=base_index+1))
+			done
+			;;
+		
+	esac
+}
+
+################################################################################
+# name    : get_opposite_root_pwd
+# describe  : get the root password of opposite ip or current single host
+# parameter list:
+#           $1    ne name
+#           $2    ne oppsite ip
+# output  :
+#         RETURN[0]    root password of opposite ip or current single host.
+# rerurn  : 0 succ, 1 failure
+###############################################################################
+function get_opposite_root_pwd
+{
+	#set -x
+	ne_name="$1"
+	oppsite_ip="$2"
+	#get ne index in selected net type
+	read_value "_selectedNETypeList2"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting _selectedNETypeList2 value failed."
+		return 1
+	fi
+	typeset all_ne_list="${RETURN[0]}"	
+	typeset ne_idx=`echo "${all_ne_list}" |
+		awk -F, -vne_name="${ne_name}" '
+		BEGIN{
+			ptn="^" ne_name "$";
+		}
+		{
+			for(i=1;i<=NF;i++)
+			{
+				if($i ~ ptn)
+				{
+					print i;
+					exit 0;
+				}
+			}
+			print 0
+		}' | sed "s/[ \t]//g"`
+	if [ ${ne_idx} -eq 0 ]; then
+		install_log DEBUG LIB "Getting ne index failed, maybe ne name dosen't exist in ne list."
+		return 1
+	fi
+	
+	#get ne ip root passwd list
+	read_value "_selectedNEIPPasswdList2"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting _selectedNEIPPasswdList2 value failed."
+		return 1
+	fi
+	typeset all_ne_ip_root_pwd_list="${RETURN[0]}"
+	typeset ne_ip_root_pwd_list=`echo "${all_ne_ip_root_pwd_list}" | awk -F, -vidx="${ne_idx}" '{ print $idx }'`
+	
+	get_host_type
+	if [ $? -ne 0 ]; then
+		install_log ERROR LIB "Getting host type of localhost in dualHost failed."
+		return 1
+	fi
+	host_type="${RETURN[0]}"
+	
+	root_pwd_list=$(echo "${ne_ip_root_pwd_list}" | awk -F\| -vip_value=$oppsite_ip '{for (i=1;i<=NF;i++) if ($i ~ ip_value){print $i}}')
+	root_pwd=$(echo ${root_pwd_list} | awk -F_ '{print $2}')
+	if [ "x${root_pwd}" = "x" ];then
+		install_log "ERROR" "LIB" "get root password of $oppsite_ip of ne ${ne_name} failed."
+		return 1
+	fi
+		
+	decodePwd "${root_pwd}"
+	if [ $? -ne 0 ]; then
+		install_log "ERROR" "LIB" "decode ${root_pwd} failed."
+		return 1
+	fi
+	RETURN[0]="${RETURN[0]}"
+}
+
+################################################################################
+# name    : get_install_standby_ip
+# describe  : 
+# parameter list:
+#           $1    ne name
+# output  :
+#         RETURN[0]    standby ip
+# rerurn  : 0 succ, 1 failure
+###############################################################################
+function get_install_standby_ip
+{
+	read_value "_hostType"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "read_value _hostType failed."
+		return 1
+	fi
+	typeset install_type="${RETURN[0]}"
+	
+	typeset install_standby_ip=""
+	if [ "x${install_type}" = "xstandby" ]; then
+		read_value "_hostip"
+		if [ $? -ne 0 ]; then
+			install_log DEBUG LIB "read_value _hostip failed."
+			return 1
+		fi
+		install_host_ip="${RETURN[0]}"
+	else
+		read_value "_hostip.1"
+		if [ $? -ne 0 ]; then
+			install_log DEBUG LIB "read_value _hostip.1 failed."
+			return 1
+		fi
+		install_standby_ip="${RETURN[0]}"		
+	fi
+	
+	RETURN[0]="${install_standby_ip}"
+	
+	return 0
+
+}
+
+################################################################################
+# name    : get_install_host_ip
+# describe  : 
+# parameter list:
+#           $1    ne name
+# output  :
+#         RETURN[0]    host ip
+# rerurn  : 0 succ, 1 failure
+###############################################################################
+function get_install_host_ip
+{
+	read_value "_hostType"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "read_value _hostType failed."
+		return 1
+	fi
+	typeset install_type="${RETURN[0]}"
+	
+	typeset install_host_ip=""
+	if [ "x${install_type}" = "xstandby" ]; then
+		read_value "_hostip.1"
+		if [ $? -ne 0 ]; then
+			install_log DEBUG LIB "read_value _hostip.1 failed."
+			return 1
+		fi
+		install_host_ip="${RETURN[0]}"
+	else
+		read_value "_hostip"
+		if [ $? -ne 0 ]; then
+			install_log DEBUG LIB "read_value _hostip failed."
+			return 1
+		fi
+		install_host_ip="${RETURN[0]}"		
+	fi
+	
+	RETURN[0]="${install_host_ip}"
+	
+	return 0
+}
+
+################################################################################
+# name    : get_install_all_ip
+# describe  : 
+# parameter list:
+#           $1    ne name
+# output  :
+#         RETURN[0]    standby ip
+# rerurn  : 0 succ, 1 failure
+###############################################################################
+function get_install_all_ip
+{
+	read_value "_selectedNEIPList"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "read_value _selectedNEIPList failed."
+		return 1
+	fi
+	typeset install_ip_list="${RETURN[0]}"
+	
+	RETURN[0]=$(echo "${install_ip_list}"|awk -F, '{ for(i=1;i<=NF;i++) print $i; }'|awk -F\| '{ for(i=1;i<=NF;i++) print $i; }'|awk -F_ '{ print $1; }'|sort -u)
+}
+
+################################################################################
+# name    : get_node_install_index
+# describe  : on the localhost get ne install index
+# parameter list:
+#           $1    ne name
+# output  :
+#         RETURN[0]    install ip
+# rerurn  : 0 succ, 1 failure
+###############################################################################
+function get_node_install_index
+{
+    RETURN[0]=""
+	typeset ne_name="$1"
+	
+	if [ $# -ne 1 ]; then
+		install_log DEBUG LIB "Function get_ne_ip_list parameters count error."
+		return 1
+	fi
+	typeset ne_name="$1"
+	
+	read_value "_hostip"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting _hostip value failed."
+		return 1
+	fi
+	typeset install_ip="${RETURN[0]}"
+
+    get_host_type
+    if [ $? -ne 0 ];then
+        install_log DEBUG "LIB" "Getting host type failed."
+        return 1
+    fi
+    typeset host_type="${RETURN[0]}"
+	
+	#get ne index in selected net type
+	read_value "_selectedNETypeList2"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting _selectedNETypeList2 value failed."
+		return 1
+	fi
+	typeset all_ne_list="${RETURN[0]}"
+	
+	typeset ne_idx=`echo "${all_ne_list}" |
+		awk -F, -vne_name="${ne_name}" '
+		BEGIN{
+			ptn="^" ne_name "$";
+		}
+		{
+			for(i=1;i<=NF;i++)
+			{
+				if($i ~ ptn)
+				{
+					print i;
+					exit 0;
+				}
+			}
+			print 0
+		}' | sed "s/[ \t]//g"`
+	if [ ${ne_idx} -eq 0 ]; then
+		install_log DEBUG LIB "Getting ne index failed, maybe ne name dosen't exist in ne list."
+		return 1
+	fi
+	
+	#get ne ip list
+	read_value "_selectedNEIPList2"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting _selectedNEIPList value failed."
+		return 1
+	fi
+	typeset all_ne_ip_list="${RETURN[0]}"
+	typeset ne_ip_list=`echo "${all_ne_ip_list}" | awk -F, -vidx="${ne_idx}" '{ print $idx }'`
+	
+	typeset index=0
+	typeset result_index=0
+	for ne_ip in `echo "${ne_ip_list}" | sed "s#|# #g"`
+	do
+		typeset tmp_dm_type=`echo "${ne_ip}" | awk -F: '{ print $1 }'`
+		typeset tmp_ip_str=`echo "${ne_ip}" | awk -F: '{ print $2 }'`
+		typeset tmp_host_str=""
+		typeset tmp_standby_str=""
+		if [ "X${host_type}" = "Xsingle" ]; then
+			typeset ip_tmp=$(echo "${tmp_ip_str}" | awk -F_ '{ print $1 }')
+		elif [ "x${host_type}" = "xmaster" ]; then
+			tmp_host_str=$(echo "${tmp_ip_str}" | awk -F/ '{ print $2 }')
+			typeset ip_tmp=$(echo "${tmp_host_str}" | awk -F_ '{ print $1 }')
+		else
+			tmp_standby_str=$(echo "${tmp_ip_str}" | awk -F/ '{ print $3 }')
+			typeset ip_tmp=$(echo "${tmp_standby_str}" | awk -F_ '{ print $1 }')
+		fi
+
+		if [ "x${ip_tmp}" = "x${install_ip}" ]; then
+			result_index=${index}
+			break
+		fi
+		
+		((index=index+1))
+
+	done	
+	
+	RETURN[0]=${result_index}
+	
+}
+
+################################################################################
+# name    : chang_ne_name
+# describe  : return simple ne name
+# parameter list:
+#           $1    ne name
+# output  :
+#         RETURN[0]    install ip
+###############################################################################
+function chang_ne_name
+{
+	typeset ne_name="$1"
+	
+	case ${ne_name} in
+		MDMC_ALL)
+			RETURN[0]="MC"
+		;;
+		MI|OM|APACHE|CGW)
+			RETURN[0]=${ne_name}
+			;;
+		SIS)
+			RETURN[0]="UP"
+		;;
+		Charging_with_Dccproxy)
+			RETURN[0]="CHG"
+			;;
+		
+	esac
+}
+
+################################################################################
+# name    : get_up_all_ne
+# describe  : get up all ne name
+# parameter list:
+#           $1    ne name
+# output  :
+#         RETURN[0]    install ip
+###############################################################################
+function get_up_all_ne
+{
+	typeset up_ne_list=""
+	RETURN[0]=""
+	
+	read_value "_selectedUPTypeList"
+	if [ $? -ne 0 ]; then
+		install_log DEBUG LIB "Getting _selectedUPTypeList value failed."
+		return 1
+	fi
+	typeset up_ne_list="${RETURN[0]}"
+	
+	typeset up_ne_list_tmp=$(echo "${up_ne_list}" |sed 's/[\/ , :]/ /g' |sed 's/[^A-Za-z]/ /g')
+	typeset up_all_ne=""
+	for ne_name in ${up_ne_list_tmp}
+	do
+		echo ${ne} |grep -w "${ne_name}" >/dev/null
+		if [ $? -ne 0 ];then
+			up_all_ne="${up_all_ne} ${ne_name}"
+		fi
+	done
+	
+	RETURN[0]="$(echo ${up_all_ne} |tr A-Z a-z)"
+}

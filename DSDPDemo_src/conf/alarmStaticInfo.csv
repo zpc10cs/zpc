@@ -1,0 +1,5 @@
+208141001,Campaign Fails to Connect to the Oracle Database,Communications alarm,Communications alarm
+208141002,CPU Is Overloaded,Physical violation,Physical violation
+208141003,Memory Is Overloaded,Physical violation,Physical violation
+208141005,Redis Is Unavailable,Communications alarm,Communications alarm
+208141006,Zookeeper Is Unavailable,Communications alarm,Communications alarm

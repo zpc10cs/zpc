@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:dsf="http://www.huawei.com/schema/dsf"
+	xsi:schemaLocation="
+        http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+        http://www.huawei.com/schema/dsf
+        http://www.huawei.com/schema/dsf/spring-dsf-1.0.xsd">
+
+	<dsf:exporter name="dsdpdemo.monitor.DSFHealthService"
+		interface="com.huawei.jaguar.commons.sdk.maintenance.monitor.client.dsf.DSFHealthService"
+		ref="dsdpdemo.dsfHealthService" executes="${dsdpdemo.monitor.DSFHealthService.executes}">
+		<dsf:method name="checkStatus"
+			executes="${dsdpdemo.monitor.DSFHealthService.checkStatus.executes}" />
+	</dsf:exporter>
+
+	<dsf:exporter name="dsdpdemo.ItemService"
+		interface="com.huawei.jaguar.dsdp.demo.service.dsf.ItemService" ref="dsdpdemo.itemService"
+		executes="${dsdpdemo.ItemService.executes}">
+		<dsf:method name="create" executes="${dsdpdemo.ItemService.create.executes}" />
+		<dsf:method name="update" executes="${dsdpdemo.ItemService.update.executes}" />
+		<dsf:method name="delete" executes="${dsdpdemo.ItemService.delete.executes}" />
+		<dsf:method name="retrieve"
+			executes="${dsdpdemo.ItemService.retrieve.executes}" />
+	</dsf:exporter>
+
+
+
+</beans>

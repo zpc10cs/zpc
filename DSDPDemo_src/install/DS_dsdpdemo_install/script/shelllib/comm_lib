@@ -1,0 +1,5983 @@
+#!/usr/bin/ksh
+#set -x
+#############################################################################################
+#名 称: comm_lib                                                                            #
+#功 能: 提供公共函数库                                                                      #
+#声 明: [公开]对外公开,供产品二次开发脚本调用                                               #
+#       [私有、废弃]为框架私有,不保证其完全通用及有效                                       #
+#--------------------------------------函数列表---------------------------------------------#
+##01.read_value                     读取配置文件中某个健的值**************************[公开]#
+##02.log_echo                       日志输出函数**************************************[公开]#
+##03.uncompress_pkg                 解压Z包*******************************************[私有]#
+##04.untar_pkg                      解压tar包*****************************************[私有]#
+##05.make_dir                       创建目录******************************************[私有]#
+##06.message_echo                   日志输出函数**************************************[私有]#
+##07.message_end                    日志输出函数**************************************[私有]#
+##08.message_error                  日志输出函数**************************************[私有]#
+##09.message_log                    日志输出函数**************************************[私有]#
+##10.message_rate                   日志输出函数**************************************[私有]#
+##11.message_file                   日志输出函数**************************************[私有]#
+##12.is_integer                     检查是否是整数************************************[私有]#
+##13.validate_ip                    校验ip是否连通************************************[私有]#
+##14.initiate                       初始化,包括创建目录,获取包************************[私有]#
+##15.set_constants                  设置环境常量**************************************[私有]#
+##16.transfer_file_via_ftp          使用ftp协议传输文件*******************************[私有]#
+#############################################################################################
+#history:2007-05-23:Tag first label
+#modify:A01E30804
+#modify:A01E31130
+#add:get_via_ftp新增一个参数tarns_port
+#delete:删除log_echo对end以及error的支持
+#2007-05-30:label:增加对ftp错误码555的捕捉
+#2007-05-30:modify:修改文件传输大小的对比方法，以及信息提示
+#2007-06-06:add:增加dispatch包分发的功能
+#2007-06-11:add:将cfg_file中的函数合入
+#2007-06-13:A01E33017:将500作为错误码捕捉,get_via_ftp中对比文件大小前先进行非空判断
+#2007-06-13:add:将用户家目录下的ideploy_wrap.sh等文件删除
+#2007-06-18:A01E33014:convert,convert_files,search_dir三个函数,用于文件格式转换,initiate中添加调用
+#2007-06-20:modify:修改了conf目录下文件格式的处理，优化了ideploy_del的处理
+#2007-08-29:modify:修改了conf目录下文件的删除与文件格式的处理，不在需要另外传输properties文件
+#2007-08-30:modify:修改ftp中用户名与密码的打印方式，避免将反斜杠转义
+#2007-10-19:modify:修改get_via_ftp,使支持文件名称中含有空格的情况,以及支持suse10
+#2007-10-30:add & modify:新增get_apps_pkg与get_script_pkg,用于分解包分发步骤;
+#                        修改set_constants中定义的全局常量名称,避免与产品定义的变量冲突
+#2007-12-20:add & modify:新增message_file用于显示只写入文件不在界面显示的日志；修改set_constants在写入全局变量之前删除
+#                       ideploy.inc中已经存在的
+#2007-12-28:modify:修改ideploy_del函数，将ideploy.inc的copy操作移到分发二次开发包中，只进行一次；
+#                  将cfgdispatch包的分发移到二次开发包分发完成后进行；
+#                  取消分发业务包前对是否含有键的检查(1.框架已经做了相关的检查2.hp平台上包列表总长超过3000时该检查会抛出awk错误)
+#2008-06-13:modify:扩展进度接口，将conf目录下的propertise文件统一命名为config.properties
+#2008-07-04:modify:问题单AR5D06432,通过使用全局变量IDEPLOY_NULL替换/dev/null,避免系统中/dev/null没有写入权限的问题
+#2008-12-09:modify:修改cfg_update_sec_key_value中行注释的获得算法，对部分方法添加set -o noglob
+#2008-12-17:modify:修改get_via_ftp中使用ftp指令获取文件的指令，支持redhat
+#2009-4-10:add 增加修改IP、修改IP获取策略、绑定网卡、重启网卡的相关函数
+#2009-4-24:modify:修改生产调测过程中发现的绑定网卡、改IP的相关问题
+#2009-4-27:modify:修改使用ftp获取文件的函数get_via_ftp为支持获取(get)和发送(put)文件的函数transfer_file_via_ftp
+#2009-5-7:modify:修改modify_eth_card_ip、modify_eth_card_bond函数的返回值；分发二次开发和业务包时，从ftpserver文件中读取的ftp密码增加解密处理
+#2009-5-19:modify:修改is_integer方法只判断是否由数字组成，而不判断是否超过了最大整数2147483647
+#2009-5-23:modify:修改modify_hostip_obtain_policy，在修改IP的函数中调用该方法进行修改IP获取策略，不用单独调用
+#2009-6-1:add:添加sftp发包的方法，同时调整原来的ftp发包，方法调用过程如下
+#get_all_pkg
+#    get_script
+#        transfer_file_via_ftp/transfer_file_via_sftp
+#    get_pkg
+#        transfer_file_via_ftp/transfer_file_via_sftp
+#get_script_pkg
+#    get_script
+#        transfer_file_via_ftp/transfer_file_via_sftp
+#get_apps_pkg
+#    get_pkg
+#        transfer_file_via_ftp/transfer_file_via_sftp
+#2009-6-8:modify：修改transfer_file_via_ftp方法中ftp获取文件的指令，如果安装了kerberos协议的机器，
+#                 ftp增加-u选项，suse机器增加epsv4指令，其他的机器按照原来的使用-inv选项，不需要增加epsv4指令
+#############################################################################################
+
+#########################################################################################
+#read_value
+#读取properties文件,返回脚本需要的值
+#参数1,properties文件(包含绝对路径),可以缺省
+#参数2,key键值,不可缺省
+#参数3,allow_empty,缺省为false,即不允许为key值为空
+#########################################################################################
+function read_value
+{
+    #set -x
+    typeset func_name="read_value"
+    typeset file_name=""
+    typeset key=""
+    typeset value=""
+    typeset allow_empty="iDeploy_False"
+    #若count为0,说明指定的键名不存在
+    typeset -i count=0
+    RETURN[0]=""
+    if [ $# -eq 1 ];then
+        file_name="${CONFIG_DIR}/${CONFIG}"
+        key="$1"
+    elif [ $# -eq 2 ];then
+        if [ "X$2" = "XiDeploy_False" -o "X$2" = "XiDeploy_True" ];then
+            file_name="${CONFIG_DIR}/${CONFIG}"
+            key="$1"
+            allow_empty="$2"
+        else
+            file_name="$1"
+            key="$2"
+        fi
+    elif [ $# -eq 3 ];then
+        file_name="${CONFIG_DIR}/${CONFIG}"
+        key="$1"
+        allow_empty="$2"
+    else
+        log_echo "error" "${func_name}" "${PARAMETER_UNMATCHED}!"
+        return 1
+    fi
+
+    #检查文件是否存在
+    if [ ! -f ${file_name} ];then
+        log_echo "error" "${func_name}" "\"${file_name}\" ${IS_NOT_A_FILE}!"
+        return 1
+    fi
+    if [ ! -r ${file_name} ];then
+        log_echo "error" "${func_name}" "You have no permission for read \"${file_name}\"!"
+        return 1
+    fi
+    #
+    count=`cat ${file_name}|$AWK -F= -v k="${key}" '{ if ( $1 == k ) print $2 }'|wc -l`
+    if [ ${count} -ge 2 ];then
+        log_echo "error" "${func_name}" "The format of \"${CONFIG}\" is ${WRONG}!"
+        return 1
+    fi
+    if [ ${count} -eq 1 ];then
+        value=`cat ${file_name}|$AWK -F= -v k="${key}" '{ if ( $1 == k ) print substr($0,(length($1)+2),length($0)) }'`
+        if [ $? -ne 0 ];then
+            log_echo "error" "${func_name}" "Read the value of \"${key}\" from file \"${CONFIG}\" Failed!"
+            return 1
+        else
+            if [ "X${value}" = "X" ];then
+                log_echo "log" "${func_name}" "The value of the specified key \"${key}\" is empty!"
+                #Begin,A01E31130,2007-05-24,weiyigang 60021464,Modify the return value
+                RETURN[0]=${value}
+                #End,A01E31130,2007-05-24,weiyigang 60021464,Modify the return value
+                if [ "X${allow_empty}" = "XiDeploy_False" ];then 
+                    return 1
+                else
+                    return 0
+                fi
+            else
+                #Begin,A01E31130,2007-05-24,weiyigang 60021464,Modify the return value
+                RETURN[0]=${value}
+                #End,A01E31130,2007-05-24,weiyigang 60021464,Modify the return value
+                return 0
+            fi
+        fi
+    else
+        log_echo "error" "${func_name}" "Can't find the value of the specified key \"${key}\"!"
+        return 1
+    fi
+    
+#    #key是私有的配置项
+#    user=`id |$AWK -F( '{print $2}'|$AWK -F) '{print $1}'`
+#    #检查是否存在该用户的配置项
+#    count=`cat ${file_name}|$AWK -F. -v u=${user} '{ if ( $1 == u ) print $0 }'|wc -l`
+#    if [ ${count} -eq 0 ];then
+#        log_echo "log" "${func_name}" "Can't not find the configuration for user \"${user}\" in \"${CONFIG}\"!"
+#        return 1
+#    fi
+#    #将计数器置0
+#    count=0
+#    user_key="${user}.${key}"
+#    #检查是否存在user_key
+#    count=`cat ${file_name}|$AWK -F= -v k=${user_key} '{ if ( $1 == k ) print $2 }'|wc -l`
+#    if [ ${count} -ne 1 ];then
+#        log_echo "log" "${func_name}" "The format of \"${CONFIG}\" is ${WRONG}!"
+#        return 1
+#    fi
+#    value=`cat ${file_name}|$AWK -F= -v k=${user_key} '{ if ( $1 == k ) print $2 }'`
+#    if [ $? -ne 0 ];then
+#        return 1
+#    else
+#        if [ "X${value}" != "X" ];then
+#            RETURN[0]=`echo ${value}`
+#            return 0
+#        else
+#            log_echo "log" "${func_name}" "Read the value of \"${user_key}\" from file \"${CONFIG}\" failed!"
+#            RETURN[0]=""
+#            return 1
+#        fi
+#    fi
+}
+
+
+#########################################################################################
+#mes_filter
+#过滤关键字，在关键字的前面添加一个全角的空格
+#########################################################################################
+function mes_filter
+{
+    #set -x
+    typeset func_name="mes_filter"
+    typeset mes=$@
+    typeset mes2=""
+    typeset key_words=${FILTER_WORDS}
+    for w in ${key_words}
+    do
+#        if [ `echo ${mes} |$SED -n '/[ ]\{1,\}'${w}'[ ]\{1,\}/'p|wc -l` -ge 1 ];then
+#            mes=`echo ${mes} | $SED 's/[ ]\{1,\}'${w}'[ ]\{1,\}/　'${w}' /g'`
+#            break
+#        fi
+#        mes2=`echo ${mes} | $SED 's/[ ]\{1,\}'${w}'[ ]\{1,\}/　'${w}' /g'`
+        mes2=`echo ${mes} | $SED 's/[ ]\{1,\}'${w}'/　'${w}'/g'`
+        if [ "X${mes}" != "X${mes2}" ];then
+            break
+        fi
+    done
+    echo ${mes2}
+}
+
+#日志打印，级别日志中的关键字不着色
+function log_echo_no_color_up
+{
+    typeset func_name="log_echo_no_color_up"
+    IDEPLOY_LOG_PREFIX="{:}{::}"
+    IDEPLOY_LOG_SUFFIX="{::}{:}"
+    log_core $@
+    
+}
+
+function log_echo
+{
+    typeset func_name="log_echo"
+    IDEPLOY_LOG_PREFIX=""
+    IDEPLOY_LOG_SUFFIX=""
+    log_core $@
+
+}
+
+#########################################################################################
+#   Name:           modify_ip_obtain_policy
+#   Description:    修改网卡的IP获取策略
+#	input
+#  		1. 网卡配置文件路径           需要修改IP获取策略的网卡配置文件路径（绝对路径）
+#  		2. ip获取策略                 修改后的IP获取策略
+#   Return:  
+#		SUCC                                        修改成功
+#       ERR_MOD_IP_OBTAIN_POLICY_PARA_ERR           参数不正确
+#       ERR_MOD_IP_OBTAIN_POLICY_GET_CURR           获取网卡当前的IP获取策略失败
+#       ERR_MOD_IP_OBTAIN_POLICY_MOD_CONFIG_FILE    修改网卡配置文件中的IP获取策略失败
+#########################################################################################
+function modify_hostip_obtain_policy
+{
+	typeset func_name="modify_hostip_obtain_policy"	
+    typeset policy=$2
+    typeset eth_config_file=$1
+    typeset curr_policy=""
+    typeset -i exist_ip_obtain_policy=0
+    	    
+    #校验是否有两个参数
+    if [ $# -ne 2 ];then
+        log_echo "error" "${func_name}" "The parameter number error,required 2 parameter."
+        return ${ERR_MOD_IP_OBTAIN_POLICY_PARA_ERR}
+    fi
+       
+    #读取网卡当前的IP获取策略
+    exist_ip_obtain_policy=` cat ${eth_config_file} |$GREP "^[ ]*BOOTPROTO" |wc -l`
+    if [ ${exist_ip_obtain_policy} -ge 1 ];then
+        read_value "${eth_config_file}" "BOOTPROTO"
+        if [ $? -ne 0 ] ;then
+            log_echo "error" "${func_name}" "Read current ip obtain policy failed."
+            return ${ERR_MOD_IP_OBTAIN_POLICY_GET_CURR}
+        fi
+        curr_policy="${RETURN[0]}"
+    
+        #去掉前后的单引号
+        trim_quotation_mark "${curr_policy}"
+        curr_policy="${RETURN[0]}"
+    fi
+    
+    #网卡当前的IP获取策略与修改后的IP获取策略一致，没有必要修改，直接返回
+    if [ "X${curr_policy}" = "X${policy}" ];then
+        log_echo "info" "${func_name}" "Current ip obtain policy is ${curr_policy},needn't modify."
+        return ${SUCC}
+    fi
+    
+    #修改网卡配置文件中网卡Ip的获取策略
+    log_echo "info" "${func_name}" "Modify ip obtain policy in eth card config file ${eth_config_file}."
+    if [ ${exist_ip_obtain_policy} -ge 1 ];then
+        update_inc_file "${eth_config_file}" "BOOTPROTO" "${policy}"
+        if [ $? - ne 0 ];then
+            log_echo "error" "${func_name}" "Modify ${alias_name}'s ip obtain policy failed."
+            return ${ERR_MOD_IP_OBTAIN_POLICY_MOD_CONFIG_FILE}
+        else
+            log_echo "info" "${func_name}" "Modify ${alias_name}'s ip obtain policy successfully."
+            return ${SUCC}
+        fi
+    else
+        echo "BOOTPROTO='${policy}'" >> "${eth_config_file}"
+        return ${SUCC}
+    fi    
+    
+}
+
+#########################################################################################
+#   Name:           modify_eth_card_ip
+#   Description:    修改网卡的IP地址
+#	input
+#  		1. 网卡别名               需要修改IP的网卡名称
+#  		2. 新网卡IP               网卡的新IP
+#  		3. 新的子网掩码           网卡新的子网掩码  
+#   Return:  
+#		SUCC                          修改成功
+#       ERR_MOD_IP_NOT_LINUX          不是linux操作系统
+#       ERR_MOD_IP_NOT_ROOT           不是root用户
+#       ERR_MOD_IP_PARA_ERROR         参数不正确
+#       ERR_MOD_IP_GET_ETH_NAME       获取网卡名称失败
+#       ERR_MOD_IP_GET_ETH_CFG_FILE   获取网卡配置文件失败
+#       ERR_MOD_IP_GET_CURR_IP        使用ifconfig获取网卡当前IP失败
+#       ERR_MOD_IP_GET_CFG_CURR_IP    从网卡配置文件获取当前IP失败
+#       ERR_MOD_IP_MOD_HOSTS_IP       修改/etc/hosts中的IP失败
+#       ERR_MOD_IP_MOD_CFG_IP         修改网卡配置文件中的IP失败
+#       ERR_MOD_IP_MOD_CFG_NETMASK    修改子网掩码失败
+#       ERR_MOD_IP_OBTAIN_POLICY      修改网卡的IP获取策略失败
+#       ERR_MOD_IP_IP_IS_USED         新的IP已经被其他网卡使用  
+#       ERR_MOD_IP_GET_OLD_BOND       获取网卡对应的绑定名称失败
+#########################################################################################
+function modify_eth_card_ip
+{
+	typeset func_name="modify_eth_card_ip"
+	typeset alias_name=$1
+    typeset new_ip=$2
+    typeset netmask=$3
+    typeset eth_name=""
+    typeset eth_config_file=""
+    typeset hosts_file="/etc/hosts"
+    typeset old_ip=""
+    typeset hostname=""
+    typeset config_file_eth_ip=""
+    typeset -i exist_ip_in_config_file=0
+    
+    if [ "X${OS_TYPE}" != "Xlinux" ];then
+        log_echo "error" "${func_name}" "${func_name} current can't support ${OS_TYPE}."
+        return ${ERR_MOD_IP_NOT_LINUX}
+    fi
+    
+    #校验是否是root用户
+    isRoot
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "Modify eth card ip must use user root."
+        return ${ERR_MOD_IP_NOT_ROOT}
+    fi
+    
+    #校验是否传入了2个或3个参数
+    if [ $# -ne 2 -a $# -ne 3 ];then
+        log_echo "error" "${func_name}" "The parameter number error,required 2 or 3 parameter."
+        return ${ERR_MOD_IP_PARA_ERROR}
+    fi
+          
+    #根据网卡别名获取网卡名称
+    log_echo "info" "${func_name}" "Get eth card name by alias ${alias_name}."
+    get_eth_name_by_alias "${alias_name}"
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "Get eth card name failed."
+        return ${ERR_MOD_IP_GET_ETH_NAME}
+    fi    
+    eth_name="${RETURN[0]}"
+    
+    #根据网卡名称获取网卡配置文件
+    log_echo "info" "${func_name}" "Get eth card config file by eth card name ${eth_name}."
+    get_config_file_by_eth_name "${eth_name}"
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "Get eth card config file failed."
+        return ${ERR_MOD_IP_GET_ETH_CFG_FILE}
+    fi 
+    eth_config_file="${RETURN[0]}"
+    
+    #修改网卡的IP获取策略
+    log_echo "info" "${func_name}" "Modify eth card ${eth_name} ip obtain policy."
+    modify_hostip_obtain_policy "${eth_config_file}" "${IP_OBTAIN_POLICY}"
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "Modify eth card ip obtain policy failed."
+        return ${ERR_MOD_IP_OBTAIN_POLICY}
+    fi
+    
+    #根据网卡名称获取网卡当前的IP
+    log_echo "info" "${func_name}" "Get eth card current ip by eth card name ${eth_name}."
+    get_ip_by_eth_name "${eth_name}"
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "Get eth ip failed."
+        return ${ERR_MOD_IP_GET_CURR_IP}
+    fi 
+    old_ip="${RETURN[0]}"
+    
+    #读取网卡配置文件中的IP值
+    exist_ip_in_config_file=` cat ${eth_config_file} |$GREP "^[ ]*IPADDR" |wc -l`
+    
+    if [ ${exist_ip_in_config_file} -ge 1 ];then
+        log_echo "info" "${func_name}" "Read eth card ip from file ${eth_config_file}."
+        read_value "${eth_config_file}" "IPADDR"
+        if [ $? -ne 0 ];then
+            log_echo "error" "${func_name}" "Read eth card current ip form ${eth_config_file} failed."
+            return ${ERR_MOD_IP_GET_CFG_CURR_IP}
+        fi
+        config_file_eth_ip="${RETURN[0]}"
+        
+        #去掉前后的单引号
+        trim_quotation_mark "${config_file_eth_ip}"
+        config_file_eth_ip="${RETURN[0]}"
+    fi
+    #判断网卡配置文件中的IP地址与使用ifconfig命令得到的IP地址是否相等
+    if [ "X${old_ip}" != "X${config_file_eth_ip}" ];then
+        log_echo "warn" "${func_name}" "The eth card ${eth_name}'s ip in file ${eth_config_file} not equal with obtain by command ifconfig."
+        #return 1
+    fi
+    
+    #从etc/hosts中查找该网卡的IP，如果etc/hosts文件中存在该网卡的IP，且当前的IP与新的IP相同，没有必要修改直接返回
+    typeset -i num=0
+    if [ ! -z "${old_ip}" ];then
+       num=` cat ${hosts_file} | grep "^[ 	]*${old_ip}[ 	]*" |wc -l`
+    fi
+    if [ ${num} -eq 1 -a "X${old_ip}" = "X${new_ip}" ];then
+        log_echo "info" "${func_name}" "The eth card ${eth_name}'s ip current is ${old_ip},needn't modify."
+        #修改子网掩码
+        modify_eth_card_netmask "${eth_config_file}" "${netmask}"
+        return $?
+    fi
+    
+    is_ip_used "${new_ip}"
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "The new ip:${new_ip} is used by other eth card." 
+        return ${ERR_MOD_IP_IP_IS_USED}   
+    fi
+    
+    typeset hostname=`hostname`
+    typeset curr_hostname=""
+    typeset curr_hostalias=""
+    typeset -i new_ip_num=0
+    
+    #修改/etc/hosts中的IP，如果/etc/hosts中以前没有写入该IP，则直接写入，否则替换
+    log_echo "info" "${func_name}" "Modify eth card ip in file ${hosts_file}."
+    #修改前备份/etc/hosts文件
+    cp "${hosts_file}" "${hosts_file}.bak"
+    if [ ${num} -lt 1 ];then
+        #判断/etc/hosts中是否已经写过新的IP，如果已经写过则不写
+        new_ip_num=` cat "${hosts_file}" | $GREP "^[ 	]*${new_ip}[ 	]*${hostname}$" |wc -l`
+        if [ ${new_ip_num} -lt 1 ];then
+            echo "${new_ip}   ${hostname}" >> "${hosts_file}"
+        fi
+    else
+        curr_hostname=` cat "${hosts_file}" | $AWK -v key="${old_ip}" '{ if ($1 == key) print $2}'`
+        curr_hostalias=` cat "${hosts_file}" | $AWK -v key="${old_ip}" '{ if ($1 == key) print $3}'`
+        if [ -z "${curr_hostname}" ];then
+            curr_hostname="${hostname}"
+        fi
+        
+        #修改etc/hosts中的IP
+        if [ -z "${curr_hostalias}" ];then
+            file_replace_line_by_exp "${hosts_file}" "^[ 	]*${old_ip}[ 	]*" "${new_ip}   ${curr_hostname}"
+        else
+            file_replace_line_by_exp "${hosts_file}" "^[ 	]*${old_ip}[ 	]*" "${new_ip}   ${curr_hostname}   ${curr_hostalias}"
+        fi
+                
+	    if [ $? -ne 0 ];then
+	        log_echo "error" "${func_name}" "Modify new ip in ${hosts_file} failed."
+	        cp "${hosts_file}.bak" "${hosts_file}"
+		    return ${ERR_MOD_IP_MOD_HOSTS_IP}
+	    fi
+    fi
+       		
+	#修改网卡配置文件中网卡Ip
+	log_echo "info" "${func_name}" "Modify eth card ip in eth config file ${eth_config_file}."
+	if [ ${exist_ip_in_config_file} -ge 1 ];then
+        update_inc_file "${eth_config_file}" "IPADDR" "${new_ip}"
+        if [ $? -ne 0 ];then
+            log_echo "error" "${func_name}" "Modify new ip in ${eth_config_file} failed."
+            cp "${hosts_file}.bak" "${hosts_file}"
+            return ${ERR_MOD_IP_MOD_CFG_IP}    
+        fi
+    else
+        echo "IPADDR='${new_ip}'" >> "${eth_config_file}"
+    fi
+    
+    #获取网卡以前的绑定名称
+    get_old_bond_name "${eth_name}"
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "Get eth card ${eth_name} bond name failed."
+        return ${ERR_MOD_IP_GET_OLD_BOND}
+    fi
+    typeset eth_old_bond_name="${RETURN[0]}"
+    typeset eth_old_bond_file="/etc/sysconfig/network/ifcfg-${eth_old_bond_name}"
+    
+    #如果网卡以前的绑定配置文件存在，删除以前的绑定文件
+    if [ -f "${eth_old_bond_file}" ];then
+        rm -f "${eth_old_bond_file}"
+    fi
+       
+    #修改子网掩码
+    modify_eth_card_netmask "${eth_config_file}" "${netmask}"
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "Modify netmask in ${eth_config_file} failed."
+        cp "${hosts_file}.bak" "${hosts_file}"
+        return ${ERR_MOD_IP_MOD_CFG_NETMASK} 
+    fi
+				
+    rm -rf "${hosts_file}.bak"
+	log_echo "info" "${func_name}" "Modify ${alias_name}'s ip successfully."
+	return ${SUCC}
+}
+
+#########################################################################################
+#   Name:           modify_eth_card_netmask
+#   Description:    修改网卡配置文件中的子网掩码
+#	input
+#  		1. 网卡配置文件           网卡对应的配置文件
+#  		2. 子网掩码               新的子网掩码
+#   Return:  
+#		SUCC                        修改子网掩码成功
+#       ERR_MOD_NETMASK_GET_CURR    获取当前的子网掩码失败
+#       ERR_MOD_NETMASK_FAIL        修改网卡配置文件中子网掩码失败
+#########################################################################################
+function modify_eth_card_netmask
+{
+	typeset func_name="modify_eth_card_netmask"
+	typeset eth_config_file=$1
+	typeset netmask=$2
+	typeset old_netmask=""
+	typeset -i exist_netmask=0
+	
+	#如果传入的子网掩码为空，不修改直接返回
+	if [ -z "${netmask}" ];then
+	    log_echo "info" "${func_name}" "Needn't modify eth card netmask."
+	    return ${SUCC}
+	fi
+	
+	exist_netmask=` cat ${eth_config_file} |$GREP "^[ ]*NETMASK" |wc -l`
+	
+	if [ ${exist_netmask} -ge 1 ];then
+	    #读取当前网卡配置文件中的子网掩码
+	    read_value "${eth_config_file}" "NETMASK"
+	    if [ $? -ne 0 ];then
+	        log_echo "error" "${func_name}" "Read netmask in ${eth_config_file} failed."
+            return ${ERR_MOD_NETMASK_GET_CURR} 
+	    fi
+	    old_netmask="${RETURN[0]}"
+	
+	    #去掉前后的单引号
+        trim_quotation_mark "${old_netmask}"
+        old_netmask="${RETURN[0]}"
+    fi
+	
+	#判断当前的子网掩码和新的子网掩码是否相同，如果相同则不用修改
+	if [ "X${old_netmask}" = "X${netmask}" ];then
+	    log_echo "info" "${func_name}" "The current netmask is ${old_netmask},needn't modify eth card netmask."
+	    return ${SUCC}
+	fi
+	
+	#修改网卡配置文件中的子网掩码
+	log_echo "info" "${func_name}" "Modify eth card netmask in eth config file ${eth_config_file}."
+	if [ ${exist_netmask} -ge 1 ];then
+	    update_inc_file "${eth_config_file}" "NETMASK" "${netmask}"  
+	    if [ $? -ne 0 ];then
+            log_echo "error" "${func_name}" "Modify netmask in ${eth_config_file} failed."
+            return ${ERR_MOD_NETMASK_FAIL}    
+        fi
+    else
+        echo "NETMASK='${netmask}'" >> "${eth_config_file}"
+    fi
+    
+    log_echo "info" "${func_name}" "Modify eth card netmask successfully."
+    return ${SUCC}
+}
+
+
+#########################################################################################
+#   Name:           get_bond_ip_from_bond_file
+#   Description:    从网卡绑定文件中获取绑定的ip，如果绑定文件不存在绑定的ip为空
+#	input
+#  		1. 绑定文件路径  
+#   Return:  
+#		SUCC                           修改网卡绑定关系成功
+#       绑定的ip，如果绑定文件不存在绑定的ip为空
+#########################################################################################
+function get_bond_ip_from_bond_file
+{
+	typeset func_name="get_bond_ip_from_bond_file"
+	typeset bond_file=$1
+	typeset bond_ip=""
+	
+	#网卡绑定文件不存在，设置返回值为空
+	if [ ! -f "${bond_file}" ];then
+	    RETURN[0]=""
+        return ${SUCC}
+	fi
+	
+	bond_ip=`cat "${bond_file}" | $AWK -F= '{if ($1=="IPADDR") print $2}'`
+    trim_quotation_mark "${bond_ip}"
+    bond_ip="${RETURN[0]}"
+    RETURN[0]="${bond_ip}"
+    return ${SUCC}
+}
+
+#########################################################################################
+#   Name:           modify_eth_card_bond
+#   Description:    修改网卡的绑定关系
+#	input
+#  		1. 绑定IP                 绑定后IP
+#  		2. 绑定名称               绑定关系名称
+#  		3. 网卡1别名              绑定网卡1的名称
+#  		4. 网卡2别名              绑定网卡2的名称
+#  		5. 子网掩码               子网掩码
+#       6. 是否重启网卡           取值为true和false，true表示重启网卡，false表示不重启网卡。没有该参数时默认为true
+#   Return:  
+#		SUCC                           修改网卡绑定关系成功
+#       ERR_ETH_BOND_NOT_LINUX         不是Linux操作系统
+#       ERR_ETH_BOND_NOT_ROOT          不是root用户
+#       ERR_ETH_BOND_PARA_ERROR        参数不正确
+#       ERR_ETH_BOND_GET_ETH_NAME      获取网卡名称失败 
+#       ERR_ETH_BOND_GET_ETH_CFG_FILE  获取网卡配置文件失败
+#       ERR_ETH_BOND_GET_OLD_BOND      获取网卡老的绑定名称失败
+#       ERR_ETH_BOND_RESTART_NETWORK   网卡绑定，重启网卡失败 
+#       ERR_ETH_BOND_FILE_NOT_EXIST    网卡绑定文件没有生成
+#       ERR_ETH_BOND_FAIL              网卡绑定失败
+#       ERR_ETH_BOND_IP_IS_USED        绑定的IP被其他网卡使用 
+#########################################################################################
+function modify_eth_card_bond
+{
+	typeset func_name="modify_eth_card_bond"
+	typeset bond_ip=$1
+    typeset bond_name=$2
+    typeset eth1_alias_name=$3
+    typeset eth2_alias_name=$4
+    typeset netmask=$5
+    typeset is_restart=$6
+    typeset eth1_name=""
+    typeset eth2_name=""
+    typeset bond_file="/etc/sysconfig/network/ifcfg-${bond_name}"
+    typeset old_bond_ip=""
+    
+    if [ "X${OS_TYPE}" != "Xlinux" ];then
+        log_echo "error" "${func_name}" "${func_name} current can't support ${OS_TYPE}."
+        return ${ERR_ETH_BOND_NOT_LINUX}
+    fi
+    
+    #校验是否是root用户
+    isRoot
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "Bond eth card must use user root."
+        return ${ERR_ETH_BOND_NOT_ROOT}
+    fi
+    
+    #校验参数个数
+    if [ $# -lt 5 ];then
+        log_echo "error" "${func_name}" "The parameter number error,required 5 parameter."
+        return ${ERR_ETH_BOND_PARA_ERROR}
+    fi
+         
+    #根据网卡1别名获取网卡名称
+    log_echo "info" "${func_name}" "Get eth card name by alias ${eth1_alias_name}."
+    get_eth_name_by_alias "${eth1_alias_name}"
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "Get eth name failed."
+        return ${ERR_ETH_BOND_GET_ETH_NAME}
+    fi    
+    eth1_name="${RETURN[0]}"
+    
+    #根据网卡2别名获取网卡名称
+    log_echo "info" "${func_name}" "Get eth card name by alias ${eth2_alias_name}."
+    get_eth_name_by_alias "${eth2_alias_name}"
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "Get eth name failed."
+        return ${ERR_ETH_BOND_GET_ETH_NAME}
+    fi    
+    eth2_name="${RETURN[0]}"
+    
+    get_bond_ip_from_bond_file "${bond_file}"
+    old_bond_ip="${RETURN[0]}"  
+    #如果新的绑定IP与绑定以前的IP不相同，需要判断新的IP是否被其他网卡使用    
+    if [ "X${bond_ip}" != "X${old_bond_ip}" ];then
+        #判断新的绑定IP是否被其他网卡使用 
+        is_ip_used "${bond_ip}"
+        if [ $? -ne 0 ];then
+            log_echo "error" "${func_name}" "The bond ip:${bond_ip} is used by other." 
+            return ${ERR_ETH_BOND_IP_IS_USED}  
+        fi
+    fi  
+        
+    echo "BOOTPROTO='static'" > ${bond_file}
+    echo "IPADDR=${bond_ip}" >> ${bond_file}
+    echo "NETMASK=${netmask}" >> ${bond_file}
+    echo "STARTMODE='onboot'" >> ${bond_file}
+    echo "BONDING_MASTER='yes'" >> ${bond_file}
+    echo "BONDING_MODULE_OPTS='mode=1 miimon=200 use_carrier=1'" >> ${bond_file}
+    echo "BONDING_SLAVE0=${eth1_name}" >> ${bond_file}
+    echo "BONDING_SLAVE1=${eth2_name}" >> ${bond_file}
+        
+    #根据网卡名称获取网卡配置文件
+    get_config_file_by_eth_name "${eth1_name}" "false"
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "Get eth config file failed."
+        return ${ERR_ETH_BOND_GET_ETH_CFG_FILE}
+    fi 
+    typeset eth1_config_file="${RETURN[0]}"
+    
+    #删除绑定的网卡1的配置文件
+    if [ -f "${eth1_config_file}" ];then
+        cp "${eth1_config_file}" "${eth1_config_file}.bak"
+        rm -f "${eth1_config_file}"
+    fi
+    
+    #根据网卡名称获取网卡配置文件
+    get_config_file_by_eth_name "${eth2_name}" "false"
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "Get eth config file failed."
+        return ${ERR_ETH_BOND_GET_ETH_CFG_FILE}
+    fi 
+    typeset eth2_config_file="${RETURN[0]}"
+    
+    #删除绑定的网卡2的配置文件
+    if [ -f "${eth2_config_file}" ];then
+        cp "${eth2_config_file}" "${eth2_config_file}.bak"
+        rm -f "${eth2_config_file}"
+    fi
+    
+    #获取绑定网卡1以前的绑定名称
+    get_old_bond_name "${eth1_name}"
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "Get eth card ${eth1_name} bond name failed."
+        return ${ERR_ETH_BOND_GET_OLD_BOND}
+    fi
+    typeset eth1_old_bond_name="${RETURN[0]}"
+    typeset eth1_old_bond_file="/etc/sysconfig/network/ifcfg-${eth1_old_bond_name}"
+    
+    #如果绑定网卡1以前的绑定名称不为空且与当前的绑定名称不一样，删除以前的绑定文件
+    if [ ! -z "${eth1_old_bond_name}" -a "X${eth1_old_bond_name}" != "X${bond_name}" ];then       
+        if [ -f "${eth1_old_bond_file}" ];then
+            rm -f "${eth1_old_bond_file}"
+        fi
+    fi
+    
+    #获取绑定网卡2以前的绑定名称
+    get_old_bond_name "${eth2_name}"
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "Get eth card ${eth2_name} bond name failed."
+        return ${ERR_ETH_BOND_GET_OLD_BOND}
+    fi
+    typeset eth2_old_bond_name="${RETURN[0]}"
+    typeset eth2_old_bond_file="/etc/sysconfig/network/ifcfg-${eth2_old_bond_name}"
+    
+    #如果绑定网卡2以前的绑定名称不为空且与当前的绑定名称不一样，删除以前的绑定文件
+    if [ ! -z "${eth2_old_bond_name}" -a "X${eth2_old_bond_name}" != "X${bond_name}" ];then       
+        if [ -f "${eth2_old_bond_file}" ];then
+            rm -f "${eth2_old_bond_file}"
+        fi
+    fi
+    
+    #如果不需要重启网卡，直接返回
+    if [ "X${is_restart}" = "Xfalse" ];then
+        return ${SUCC}
+    fi
+    
+    #启动双网卡绑定
+    rcnetwork restart
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "start net bond failed."
+        return ${ERR_ETH_BOND_RESTART_NETWORK}
+    fi
+    
+    typeset check_bond_file="/proc/net/bonding/${bond_name}"
+    typeset -i i=0
+    #sleep一段时间，等待绑定文件生成
+    while [ ${i} -lt 5 ]
+    do
+        if [ -f "${check_bond_file}" ];then
+            break;
+        fi
+        
+        sleep 3
+        ((i+=1))
+    done
+    if [ ! -f "${check_bond_file}" ];then
+        log_echo "error" "${func_name}" "Build net bond failed."
+        return ${ERR_ETH_BOND_FILE_NOT_EXIST}
+    fi
+    
+    #等待文件中写入内容
+    typeset active_num=0
+    typeset status_num=0
+    i=0
+    while [ ${i} -lt 5 ]
+    do
+    	active_num=`cat ${check_bond_file} |grep "Currently Active Slave: ${eth1_name}" |wc -l`
+    	status_num=`cat ${check_bond_file} |grep "MII Status: up" |wc -l`
+        if [ ${active_num} -ne 0 -a ${status_num} -ne 0 ];then
+            break;
+        fi
+        
+        sleep 3
+        ((i+=1))
+    done
+    #typeset active_num=`cat ${check_bond_file} |grep "Currently Active Slave: ${eth1_name}" |wc -l`
+    #typeset status_num=`cat ${check_bond_file} |grep "MII Status: up" |wc -l`
+    if [ "${active_num}" -eq 1 -a "${status_num}" -eq 3 ];then
+        log_echo "info" "${func_name}" "Build net bond successfully."
+        return ${SUCC}
+    else
+       log_echo "error" "${func_name}" "Build net bond failed."
+        return ${ERR_ETH_BOND_FAIL}
+    fi
+}
+
+#########################################################################################
+#   Name:           get_old_bond_name
+#   Description:    获取网卡1当前的绑定名称，如果没有返回空
+#	input
+#  		1. 绑定的网卡1名称       
+#   Return:  
+#		
+#       
+#########################################################################################
+function get_old_bond_name
+{
+	typeset func_name="get_old_bond_name"
+	typeset eth_card_name=$1
+	typeset mac_address=""
+	typeset -i exist_inet_addr=0
+	typeset bond_name=""
+	
+	#校验参数个数
+    if [ $# -ne 1 ];then
+        log_echo "error" "${func_name}" "The parameter number error,required 1 parameter."
+        return 1
+    fi
+    
+    #获取网卡的mac地址
+    mac_address=`ifconfig -a |$AWK -v key="${eth_card_name}" '{ if ($1 == key) print $5}'`
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "Obtain ${1} mac address failed."
+        return 1
+    fi
+    
+    #获取网卡mac地址对应的网卡名称和绑定名称列表
+    typeset temp_eth_name_list=`ifconfig -a | awk -v key="${mac_address}" '{ if ($5==key) print $1}'`
+	if [ $? -ne 0 ];then
+	    log_echo "error" "${func_name}" "Get mac address ${mac_address}'s eth name failed."
+        return 1
+	fi
+	
+	#判断mac地址对应的网卡名称和绑定名称列表，找到绑定名称
+	for temp_eth_name in ${temp_eth_name_list}
+    do
+        if [ "X${temp_eth_name}" = "X${eth_card_name}" ];then
+            continue
+        fi
+        
+        exist_inet_addr=`ifconfig ${temp_eth_name} |grep "inet addr:" |wc -l`
+        
+        if [ ${exist_inet_addr} -eq 1 ];then
+            bond_name="${temp_eth_name}"
+            break
+        fi
+    done
+
+	RETURN[0]="${bond_name}"
+    return 0
+}
+
+#########################################################################################
+#   Name:           restart_eth_card
+#   Description:    重启网卡
+#	input
+#  		无
+#   Return:  
+#		0 重启成功
+#       1 重启失败
+#########################################################################################
+function restart_eth_card
+{
+	typeset func_name="restart_eth_card"
+	
+    rcnetwork restart
+	if [ $? -ne 0 ];then
+	    log_echo "error" "${func_name}" "Restart network failed."
+        return 1
+	fi
+	
+	log_echo "log" "${func_name}" "Restart network successfully."
+    return 0
+}
+
+#########################################################################################
+#   Name:           get_eth_name_by_alias
+#   Description:    根据网卡别名获取网卡名称
+#	input
+#  		1. 网卡别名       网卡的别名
+#   Return:  
+#		SUCC 获取成功
+#       ERR_GET_ETH_NAME_NOT_LINUX       不是Linux操作系统
+#       ERR_GET_ETH_NAME_PARA_ERROR      参数不正确
+#       ERR_ETH_ALIAS_SCRIPT_NOT_EXIST   获取网卡别名和网卡对应关系的脚本eth_alias.sh不存在
+#       ERR_ETH_NAME_NOT_UNIQUE          与网卡别名匹配的网卡名称不唯一
+#       ERR_ETH_NAME_NOT_EXIST           网卡别名对应的网卡名称不存在
+#########################################################################################
+function get_eth_name_by_alias
+{
+	typeset alias_script_name="/var/adm/autoinstall/scripts/eth_alias.sh"
+	typeset -i alias_name_num=0
+	typeset alias=$1
+	
+    if [ "X${OS_TYPE}" != "Xlinux" ];then
+        log_echo "error" "get_eth_name_by_alias" "get_eth_name_by_alias current can't support ${OS_TYPE}."
+        return ${ERR_GET_ETH_NAME_NOT_LINUX}
+    fi
+    
+    if [ $# -ne 1 ];then
+        log_echo "error" "get_eth_name_by_alias" "The parameter number error,require 1 parameter."
+        return ${ERR_GET_ETH_NAME_PARA_ERROR}
+    fi
+        
+    if [ ! -f "${alias_script_name}" ];then
+        log_echo "error" "get_eth_name_by_alias" "The script ${alias_script_name} not exist or not a file."
+        return ${ERR_ETH_ALIAS_SCRIPT_NOT_EXIST}
+    fi
+        
+    alias_name_num=`${alias_script_name} | $GREP "${alias}" | wc -l`
+    if [ ${alias_name_num} -ne 1 ];then
+        log_echo "error" "get_eth_name_by_alias" "The eth alias name ${alias} not unique."
+        return ${ERR_ETH_NAME_NOT_UNIQUE}
+    fi
+    
+    typeset eth_name=`${alias_script_name} | $GREP "${alias}" | $AWK '{ print $1 }'`
+    if [ -z "${eth_name}" ];then
+        log_echo "error" "get_eth_name_by_alias" "The eth name is empty."
+        return ${ERR_ETH_NAME_NOT_EXIST}
+    fi
+    
+    RETURN[0]="${eth_name}"
+    return ${SUCC}
+}
+
+#########################################################################################
+#   Name:           get_config_file_by_eth_name
+#   Description:    根据网卡名称获取mac地址
+#	input
+#  		1. 网卡名称       网卡的名称
+#  		2. 获取文件为空是否提示错误       true 提示； false 不提示
+#   Return:  
+#		0 获取成功
+#       1 获取失败
+#########################################################################################
+function get_config_file_by_eth_name
+{
+	typeset func_name="get_config_file_by_eth_name"
+	typeset is_empty_prompt=$2
+	typeset temp_ifconfig_file=""
+	
+    if [ "X${OS_TYPE}" != "Xlinux" ];then
+        log_echo "error" "${func_name}" "${func_name} current can't support ${OS_TYPE}."
+        return 1
+    fi
+    
+    if [ $# -lt 1 ];then
+        log_echo "error" "${func_name}" "The parameter number error,require 1 parameter."
+        return 1
+    fi
+        
+    if [ -z "${is_empty_prompt}" ];then
+        is_empty_prompt="true"
+    fi    
+    
+    typeset mac_address=`ifconfig -a |$AWK -v key="$1" '{ if ($1 == key) print tolower($5)}'`
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "Obtain ${1} mac address failed."
+        return 1
+    fi
+    
+    typeset ifconfig_file=`ls /etc/sysconfig/network |$GREP -i "^ifcfg-eth-id-${mac_address}$"`
+    #如果配置文件不存在，生成一个默认的
+    if [ -z "${ifconfig_file}" -a "X${is_empty_prompt}" = "Xtrue" ];then
+        log_echo "info" "${func_name}" "The eth config file not exists,create a new."
+        ifconfig_file="ifcfg-eth-id-${mac_address}"
+        temp_ifconfig_file="/etc/sysconfig/network/${ifconfig_file}"
+        echo "BOOTPROTO='static'" > "${temp_ifconfig_file}"
+        echo "MTU=''" >> "${temp_ifconfig_file}"
+        echo "REMOTE_IPADDR=''" >> "${temp_ifconfig_file}"
+        echo "STARTMODE='onboot'" >> "${temp_ifconfig_file}"
+        echo "IPADDR=''" >> "${temp_ifconfig_file}"
+        echo "NETMASK='255.255.255.0'" >> "${temp_ifconfig_file}"
+        echo "NETWORK=''" >> "${temp_ifconfig_file}"
+        echo "BROADCAST=''" >> "${temp_ifconfig_file}"      
+    fi
+    
+    RETURN[0]="/etc/sysconfig/network/${ifconfig_file}"
+    return 0
+}
+
+#########################################################################################
+#   Name:           update_inc_file
+#   Description:    向键格式的文件的某个键更新某个键
+#	input
+#  		1. 文件名       
+#  		2. 键       
+#  		3. 值       
+#   Return:  
+#		0 更新成功
+#       1 更新失败
+#########################################################################################
+function update_inc_file
+{
+	typeset func_name="update_inc_file"
+    
+    typeset file_name="$1"
+	typeset key_name="$2"	
+ 	typeset key_value="$3"
+	typeset line_buf=""
+	
+	typeset -i loc_line_index=0
+	typeset -i ret_num=0
+		
+	if [ $# -ne 3 ];then
+		log_echo "error" "${func_name}" "The parameter number error,require 3 parameter."
+        return 1
+	fi
+
+	file_is_exist "$file_name"
+	if [ $? -ne 0 ];then		
+		log_echo "error" "${func_name}" "The update file not exist."
+        return 1	
+	fi	
+	
+	$GREP "^[ 	]*${key_name}[ 	]*=" "${file_name}" >${IDEPLOY_NULL} 2>&1		
+	if [ $? -ne 0 ];then
+		log_echo "error" "${func_name}" "The file: ${file_name} not exist key: ${key_name} ."
+        return 1
+	fi
+	
+	file_replace_line_by_exp "$file_name" "^[ 	]*${key_name}[ 	]*=" "${key_name}='${key_value}'"
+	if [ $? -ne 0 ];then
+	    log_echo "error" "${func_name}" "Update file ${file_name}'s key: ${key_name} failed ."
+		return 1
+	fi
+	
+	return 0	
+}
+
+#########################################################################################
+#   Name:           get_ip_by_eth_name
+#   Description:    根据网卡名称获取IP地址
+#	input
+#  		1. 网卡名称      
+#   Return:  
+#		0 获取成功
+#       1 获取失败
+#########################################################################################
+function get_ip_by_eth_name
+{
+	typeset func_name="get_ip_by_eth_name"
+    
+    typeset eth_name="$1"
+	
+	if [ $# -ne 1 ];then
+		log_echo "error" "${func_name}" "The parameter number error,require 1 parameter."
+        return 1
+	fi			
+	
+	typeset ip=`ifconfig "${eth_name}" |$GREP "inet addr" |$AWK '{print $2}'|$AWK -F: '{print $2}'`
+	if [ $? -ne 0 ];then
+	    log_echo "error" "${func_name}" "Obtain ${eth_name} ip failed."
+        return 1
+	fi
+    RETURN[0]="${ip}"
+	
+	return 0	
+}
+
+#########################################################################################
+#   Name:           isRoot
+#   Description:    判断当前执行脚本的用户是否是root用户
+#	input
+#  		
+#   Return:  
+#		0 是root用户
+#       1 不是root用户
+#########################################################################################
+function isRoot
+{
+	#获取当前用户名
+    typeset currUser=`whoami`
+    
+    #判断当前用户名是否是root
+    if [ "X${currUser}" = "Xroot" ];then
+        return 0
+    else
+        return 1
+    fi    
+}
+
+#########################################################################################
+#   Name:           is_ip_used
+#   Description:    判断ip是否已经被该机器上的某个网卡使用
+#	input
+#  		ip  需要判断的ip
+#   Return:  
+#		0 该IP未被使用
+#       1 该IP已被某个网卡使用
+#########################################################################################
+function is_ip_used
+{	
+	typeset network_config_path="/etc/sysconfig/network/"
+    typeset eth_card_config_file_list=`ls -al  ${network_config_path} | $AWK '{print $NF}' | $GREP -v ".bak$" | $GREP "^ifcfg-"`
+    typeset eth_card_config_file=""
+    typeset ip=$1
+    typeset exist_ip="" 
+    
+    if [ -z "${ip}" ];then
+        return 0
+    fi
+    
+    for eth_card_config_file in ${eth_card_config_file_list}
+    do
+        exist_ip=`cat ${network_config_path}${eth_card_config_file} | $AWK -F= '{if ($1=="IPADDR") print $2}'`
+        trim_quotation_mark "${exist_ip}"
+        exist_ip="${RETURN[0]}"
+                
+        if [ "X${ip}" = "X${exist_ip}" ];then
+            return 1           
+        fi
+    done
+    
+    return 0
+}
+
+#########################################################################################
+#   Name:           trim_quotation_mark
+#   Description:    去掉字符串前后的单引号
+#	input
+#  		需要处理的字符串
+#   Return:  
+#		0 处理成功
+#       1 处理失败
+#########################################################################################
+function trim_quotation_mark
+{
+	typeset trimStr=$1
+    
+    trimStr=`echo ${trimStr} | $AWK -F\' '{if ( $1=="" ) {print $2} else {print $1}}'`  
+    
+    RETURN[0]="${trimStr}"
+    return 0
+}
+
+#log_echo 日志输出函数,通过$1调用不同的实现
+#End,返回的字符串用于结束脚本的运行
+#Error,返回的字符串用于结束脚本的运行,并且标记为失败
+#Echo,返回的字符串用于显示脚本执行的细节
+#Rate,返回的数字字符串用于显示脚本执行的进度信息
+#Log,返回的字符串作为脚本的日志信息输出
+function log_core
+{
+    typeset func_name="log_core"
+    typeset mode="$1"
+    shift
+    typeset msg=$@
+    case ${mode} in
+    RATE|rate|Rate)
+        message_rate ${msg}
+    ;;
+    ECHO|echo|Echo)
+        message_echo ${msg}
+    ;;
+    #END|end|End)
+    #    message_end ${mes}
+    #;;
+    ERR|err|Err|ERROR|error|Error)
+        message_err ${msg}
+    ;;
+    INFO|info|Info|Log|LOG|log)
+        message_info ${msg}
+    ;;
+    WARN|warn|Warn)
+        message_warn ${msg}
+    ;;
+    DEBUG|Debug|debug)
+        message_debug ${msg}
+    ;;
+    FILE|File|file)
+        message_file ${msg}
+    ;;
+    MODIFYIPEND|modifyipend|ModifyIpEnd)
+        message_modify_ip_end ${msg}
+    ;;
+    *)
+        log_echo "error" "${func_name}" "${PARAMETER_UNMATCHED}"
+        return 1
+    ;;
+    esac
+    if [ $? -ne 0 ];then
+        return 1
+    fi
+    return 0
+}
+
+
+function message_file
+{
+    typeset func_name="message_file"
+    typeset cur_dt="0000-00-00 00:00:00"
+    typeset get_dt="date '+%y-%m-%d %H:%M:%S'"
+    typeset tag="iDeploy:File:"
+    typeset modul="$1"
+    shift
+    typeset mes="$@"
+    cur_dt=`eval ${get_dt}`
+    echo "${tag}[FILE] [${cur_dt} ${modul}] ${mes} [/FILE]"
+    #echo
+
+    return 0
+}
+
+function message_debug
+{
+    #set -x
+    typeset func_name="message_debug"
+    typeset cur_dt="0000-00-00 00:00:00"
+    typeset get_dt="date '+%y-%m-%d %H:%M:%S'"
+    typeset modul="$1"
+    shift
+    typeset mes="$@"
+    cur_dt=`eval ${get_dt}`
+    #echo "[TIME]  ${cur_dt}"
+    #echo "[FUNC]  ${modul}"
+    echo "[DEBUG][${cur_dt} ${modul}] ${IDEPLOY_LOG_PREFIX}${mes}${IDEPLOY_LOG_SUFFIX} [/DEBUG]"
+    #echo
+    return 0
+}
+
+function message_info
+{
+    #set -x
+    #[INFO][2007-11-15 15:00:00 initiate] Deploy the package START,please wait...[/INFO]
+    typeset func_name="message_info"
+    typeset cur_dt="0000-00-00 00:00:00"
+    typeset get_dt="date '+%y-%m-%d %H:%M:%S'"
+    typeset modul="$1"
+    shift
+    typeset mes="$@"
+    cur_dt=`eval ${get_dt}`
+    #echo "[TIME] ${cur_dt}"
+    #echo "[FUNC] ${modul}"
+    echo "[INFO] [${cur_dt} ${modul}] ${IDEPLOY_LOG_PREFIX}${mes}${IDEPLOY_LOG_SUFFIX} [/INFO]"
+    #echo
+    return 0
+}
+
+function message_err
+{
+    #set -x
+    typeset func_name="message_err"
+    typeset cur_dt="0000-00-00 00:00:00"
+    typeset get_dt="date '+%y-%m-%d %H:%M:%S'"
+    typeset modul="$1"
+    shift
+    typeset mes="$@"
+    cur_dt=`eval ${get_dt}`
+    #echo "[TIME]  ${cur_dt}"
+    #echo "[FUNC]  ${modul}"
+    echo "[ERROR][${cur_dt} ${modul}] ${IDEPLOY_LOG_PREFIX}${mes}${IDEPLOY_LOG_SUFFIX} [/ERROR]"
+    #echo
+    return 0
+}
+
+function message_warn
+{
+    #set -x
+    typeset func_name="message_warn"
+    typeset cur_dt="0000-00-00 00:00:00"
+    typeset get_dt="date '+%y-%m-%d %H:%M:%S'"
+    typeset modul="$1"
+    shift
+    typeset mes="$@"
+    cur_dt=`eval ${get_dt}`
+    #echo "[TIME] ${cur_dt}"
+    #echo "[FUNC] ${modul}"
+    echo "iDeploy:Warning:[WARN] [${cur_dt} ${modul}] ${IDEPLOY_LOG_PREFIX}${mes}${IDEPLOY_LOG_SUFFIX} [/WARN]"
+    #echo 
+    return 0
+}
+
+#########################################################################################
+#message_rate
+#上报进度
+#参数1,在指定duration内最终需要达到的最大进度值
+#参数2,达到指定最大进度的持续时间,单位秒,缺省为0,即立即刷新
+#########################################################################################
+function message_rate
+{
+    #set -x
+    typeset func_name="message_rate"
+    if [ $# -eq 1 ];then
+        typeset rate="$1"
+        typeset duration="0"
+    elif [ $# -eq 2 ];then
+        typeset rate="$1"
+        typeset duration="$2"
+    else
+        return 1
+    fi
+    #对信息进行封装
+    echo
+    echo "iDeploy:Rate:${rate}:${duration}"
+    return 0
+}
+
+function message_echo
+{
+    #set -x
+    typeset func_name="message_echo"
+    typeset cur_echo="$@"
+    #对信息进行封装
+    echo "iDeploy:Echo:${cur_echo}"
+    return 0
+}
+
+function message_end
+{
+    #set -x
+    typeset func_name="message_end"
+    typeset end="$@"
+    #对信息进行封装
+    echo "iDeploy:End:${end}"
+    return 0
+}
+
+function message_modify_ip_end
+{
+   typeset modify_ip_end="$@"
+   
+   #对信息进行封装
+   echo "iDeploy:ModifyIpEnd:${modify_ip_end}"
+   
+   return 0
+}
+##########################################################
+#名称:make_dir
+#功能:创建目录
+#参数:1.dir_name(带相对路径或者绝对路径)
+##########################################################
+function make_dir
+{
+    #set -x
+    typeset func_name="make_dir"
+    if [ $# -ne 1 ];then
+        log_echo "error" "${func_name}" "${PARAMETER_UNMATCHED}!"
+        return 1
+    fi
+    typeset dir_name=$1
+    if [ ! -d ${dir_name} ];then
+        #创建目录
+        mkdir -p ${dir_name}
+        if [ $? -ne 0 ];then
+            log_echo "error" "${func_name}" "Make directory \"${dir_name}\" ${FAILD}!"
+            return 1
+        fi
+    fi
+    return 0
+}
+
+##########################################################
+#名称:transfer_file_via_ftp
+#功能:从ftp_server上获取指定的文件
+#参数:1.ftp_server_ip
+#     2.ftp_user
+#     3.ftp_passwd
+#     4.ftp_mode[传输模式]
+#     5.local_path[本地路径]
+#     6.server_path[server端路径]
+#     7.trans_port[ftp端口]
+#     8.trans_type[传输类型,取值为get和put](如果该参数的值不是put，则使用默认的get)
+#     9.file_names[文件名称](需要获取的文件名称,多值使用,分隔)
+##########################################################
+function transfer_file_via_ftp
+{
+    #set -x
+    typeset func_name="transfer_file_via_ftp"
+    if [ $# -lt 4 ];then
+        log_echo "error" "${func_name}" "${PARAMETER_UNMACTCHED}!"
+        return 1
+    fi
+    typeset ftp_server_ip=$1
+    typeset ftp_user=$2
+    typeset ftp_passwd=$3
+    typeset ftp_mode=$4    
+    typeset local_path=$5
+    typeset server_path=$6
+    typeset trans_port=$7
+    typeset trans_type=$8
+    shift 8
+    typeset file_names=$@
+    
+    if [ "X${file_names}" = "X" ];then
+        log_echo "warn" "${func_name}" "No files need to transport!"
+        return 0
+    fi
+    #校验server的ip
+#Begin:为避免现网安全加固后的主机无法使用ping命令而错误返回ip无效，兹将以下校验代码注释.2008-1-2 by weiyigang 00106702    
+#    validate_ip ${ftp_server_ip}
+#    if [ $? -ne 0 ];then
+#        log_echo "log" "${func_name}" "The specified server ip is invalidation!"
+#        return 1
+#    fi
+#End
+    
+#Begin:处理文件名称中含有空格，以及避免hp平台上awk无法处理3000以上字符串的问题.2008-1-2 by weiyigang 00106702    
+#    typeset file_numbers=`echo ${file_names}|$AWK -F, '{print NF}'`
+#    typeset get_files=""
+#    file_names=`echo ${file_names}|$SED 's/,/","/g'`
+#    file_names=`echo '"'${file_names}'"'`
+#    get_files=`echo "${file_names}"|$AWK -F, '{split($0,f,",");for(i=1;i<=NF;i++) print "get",f[i]}'`
+#New Process:    
+    typeset org_ifs=$IFS
+    typeset -i file_numbers=0
+    typeset get_files=""
+    file_names=`echo ${file_names}|$SED 's/,/","/g'`
+    file_names=`echo '"'${file_names}'"'`
+    
+    while [ -f ${TEMP} ]
+    do
+        date_num=`date '+%H%M%S'`
+        TEMP="./.ideploy_temp_${date_num}"
+        sleep 1
+    done
+    touch "${TEMP}"
+ 
+    IFS=,
+    if [ "X${trans_type}" = "Xput" ];then
+        for f in ${file_names}
+        do
+            echo "put ${f}" >> ${TEMP}
+            ((file_numbers+=1))
+        done
+    else
+        for f in ${file_names}
+        do
+            echo "get ${f}" >> ${TEMP}
+#           if [ "X${get_files}" = "X" ];then
+#               "get "${f}
+#           else
+#               get_files=${get_files}"\nget "${f}
+#           fi
+            ((file_numbers+=1))
+        done
+    fi
+
+    IFS=${org_ifs}
+    
+#    获取临时文件内容，并清空文件
+    get_files=`cat ${TEMP}`
+    rm ${TEMP}
+  
+#End
+    
+    #创建temp文件，保存ftp执行过程中产生的信息
+    while [ -f ${TEMP} ]
+    do
+        date_num=`date '+%H%M%S'`
+        TEMP="./.ideploy_temp_${date_num}"
+        sleep 1
+    done
+    touch "${TEMP}"
+    
+    typeset OS=`uname`
+    #在Linux平台关闭IPv4
+    
+    #如果是ftp是使用kerberos认证的，ftp连接需要增加-u选项，不要增加epsv4指令
+    if [ `which ftp | grep -ci "/kerberos/"` -gt 0  ];then
+        ftp -inuv >${TEMP} 2>&1 <<CMD
+        open ${ftp_server_ip} ${trans_port}
+        user ${ftp_user} ${ftp_passwd}
+        lcd ${local_path}
+        cd ${server_path}
+        ${ftp_mode}
+        ${get_files}
+        bye
+CMD
+    #suse机器需要增加epsv4指令
+    elif  [ "X${OS}" = "XLinux" -a `cat /proc/version 2>/dev/null | grep -ci "SUSE"` -gt 0 ];then
+        ftp -inv >${TEMP} 2>&1 <<CMD
+        open ${ftp_server_ip} ${trans_port}
+        user ${ftp_user} ${ftp_passwd}
+        epsv4
+        lcd ${local_path}
+        cd ${server_path}
+        ${ftp_mode}
+        ${get_files}
+        bye
+CMD
+    else
+        ftp -inv >${TEMP} 2>&1 <<CMD
+        open ${ftp_server_ip} ${trans_port}
+        user ${ftp_user} ${ftp_passwd}
+        lcd ${local_path}
+        cd ${server_path}
+        ${ftp_mode}
+        ${get_files}
+        bye
+CMD
+    fi
+    
+    cat ${TEMP}
+    #0.检查是否无连接
+    typeset err_timeout1=`cat ${TEMP}|$AWK -F: '{ if ( $1 == "ftp" && $2 == " connect" ) print $3 }'|$GREP "timed out"|wc -l`
+    typeset err_timeout2=`cat ${TEMP}|$AWK -F: '{ if ( $1 == "ftp" && $2 == " connect" ) print $3 }'|$GREP "timeout"|wc -l`
+    if [ ${err_timeout1} -ge 1 -o ${err_timeout2} -ge 1 ];then
+        log_echo "err" "${func_name}" "Connect time out,file(s) transport ${FAILED}!"
+        rm ${TEMP}
+        return 1
+    fi
+    
+    typeset err_notconnected=`cat ${TEMP}|$AWK '{ if ( $1 == "Not" && $2 == "connected." ) print $0 }'|wc -l`
+    if [ ${err_notconnected} -ge 1 ];then
+        log_echo "err" "${func_name}" "Not connected,file(s) transport ${FAILED}!"
+        rm ${TEMP}
+        return 1
+    fi
+    
+    typeset no_space=`cat ${TEMP}|$AWK '{ if ( $1 == "No" && $2 == "space" && $3 == "left" ) print $0 }'|wc -l`
+    if [ ${no_space} -ge 1 ];then
+        log_echo "error" "${func_name}" "No space left,file(s) transport ${FAILED}!"
+        rm ${TEMP}
+        return 1
+    fi
+    
+    #1.检查ftp传输过程中的错误码500,553,530,550,500,501
+    typeset err_code=`cat ${TEMP}|$AWK '{ if ( $2 != "bytes" || $3 != "received" || $4 != "in" ) print $1}'`
+    typeset err=""
+    typeset ret="0"
+    for err in ${err_code}
+    do
+        case ${err} in
+        553|530|550|555|500|501)
+            ret="1"
+        ;;
+#Begin,A01E33017,2007-06-13,weiyigang 60021464
+#        )
+#            log_echo "log" "${func_name}" "There has syntax error with error code \"${err}\"!"
+#        ;;
+#End,A01E33017,2007-06-13,weiyigang 60021464
+        *)
+        ;;
+        esac
+        if [ "X${ret}" = "X1" ];then
+            log_echo "err" "${func_name}" "Get files via ftp ${FAILED} with error code \"${err}\"!"
+            if [ "X${err}" = "X550" ];then
+                log_echo "warn" "${func_name}" "Suggestion,please make sure that all the packages which need to tranfer is on the ftp server path \"${server_path}\".Otherwise,please check whether there has enough space left on the host path \"`pwd`/${local_path}\"!"
+            fi
+            rm ${TEMP}
+            return 1
+        fi
+    done
+    
+    #2.获取ftp传输的文件大小
+    typeset i=0     #循环因子
+    typeset f_n=""  #文件数量
+    typeset t_s=""  #单个文件的实际传输大小
+    typeset f_s=""  #单个文件的大小
+    #Begin,A01E30804,2007-05-22,weiyigang 60021464,Modify the method of file size read
+    typeset file_size=`cat ${TEMP}|$AWK '{ if ( $1 == "150" ) print $0}'|$AWK -F\( '{print $NF}'|$AWK '{ if ( $2 == "bytes)." ) print $1}'`
+    #End,A01E30804,2007-05-22,weiyigang 60021464,Modify the method of file size read
+    typeset tran_size=`cat ${TEMP}|$AWK '{ if ( $2 == "bytes" && $3 == "received" && $4 == "in" ) print $1}'`
+    #检查文件系统是否有足够的剩余空间
+    if [ "X${tran_size}" != "X" -a "X${file_size}" != "X" ];then
+        while [ $i -lt ${file_numbers} ]
+        do
+            f_n=`echo ${file_names}|$AWK '{print $1}'`
+            file_names=`echo ${file_names}|$AWK '{print substr($0,length($1)+1,length($0))}'`
+            
+            t_s=`echo ${tran_size}|$AWK '{print $1}'`
+            tran_size=`echo ${tran_size}|$AWK '{print substr($0,length($1)+1,length($0))}'`
+            
+            f_s=`echo ${file_size}|$AWK '{print $1}'`
+            file_size=`echo ${file_size}|$AWK '{print substr($0,length($1)+1,length($0))}'`
+#Begin,A01E33017,2007-06-13,weiyigang 60021464            
+            if [ "X${t_s}" = "X" ];then
+                log_echo "warn" "${func_name}" "Can't read the received bytes of file \"${f_n}\",please check it manually!"
+                ((i+=1))
+                continue
+            fi
+            
+            if [ "X${f_s}" = "X" ];then
+                log_echo "warn" "${func_name}" "Can't read the bytes of file \"${f_n}\",please check it manually!"
+                ((i+=1))
+                continue
+            fi
+#End,A01E33017,2007-06-13,weiyigang 60021464            
+            if [ ${t_s} -lt ${f_s} ];then
+                log_echo "error" "${func_name}" "The size of file \"${f_n}\" is \"${f_s}\" bytes,but only \"${t_s}\" bytes received,transfer process ${FAILED}!"
+                rm ${TEMP}
+                return 1
+            fi
+            ((i+=1))
+        done
+    fi
+    #3.检查关键字
+    typeset err_key=`cat ${TEMP}`
+    for err in ${err_key}
+    do
+        case ${err} in
+        ?Invalid|invalid|denied|Unable)
+        ret="1"
+        ;;
+        *)
+        ;;
+        esac
+        if [ "X${ret}" = "X1" ];then
+            log_echo "error" "${func_name}" "Get files via ftp ${FAILED} with error key word \"${err}\"!"
+            rm ${TEMP}
+            return 1
+        fi
+    done
+    rm ${TEMP}
+    
+    return 0
+}
+
+function uncompress_pkg
+{
+    #set -x
+    typeset func_name="uncompress_pkg"
+    if [ $# -ne 1 ];then
+        log_echo "error" "${func_name}" "${PARAMATER_UNMACTCHED}"
+        return 1
+    fi
+    typeset z_tar=$1
+    typeset path=""
+    typeset name=""
+    #若参数含有路径,将路径和tar包拆分
+    if [ `echo "${z_tar}" |$GREP -c "/" ` -gt 0 ];then
+        path=`dirname ${z_tar}`
+        name=`basename ${z_tar}`
+    else
+        path="./"
+        name=${z_tar}
+    fi   
+    #检查是否是Z文件
+    if [ `file ${z_tar} | $GREP compressed |wc -l ` -gt 0 ];then
+        cd ${path}
+        uncompress ${name}
+        if [ $? -ne 0 ];then
+            log_echo "error" "${func_name}" "Uncompress the package \"${name}\" ${FAILED}!"
+            return 1
+        fi
+    fi
+    return 0 
+    
+}
+
+function untar_pkg
+{
+    #set -x
+    typeset func_name="untar_pkg"
+    if [ $# -ne 1 ];then
+        log_echo "error" "${func_name}" "${PARAMATER_UNMACTCHED}"
+        return 1
+    fi
+    typeset tar_pkg=$1
+    typeset path=""
+    typeset name=""
+    
+    #记录当前路径，在tar任务完成后返回
+    typeset origin_path=`pwd`
+    
+    #若参数含有路径,将路径和tar包拆分
+    if [ `echo "${tar_pkg}" |$GREP -c "/" ` -gt 0 ];then
+        path=`dirname ${tar_pkg}`
+        name=`basename ${tar_pkg}`
+    else
+        path="./"
+        name=${tar_pkg}
+    fi
+    
+    #检查是否是tar文件
+    if [ `file ${tar_pkg} | $GREP tar |wc -l ` -gt 0 ];then
+        cd ${path}
+        tar xvf ${name}
+        if [ $? -ne 0 ];then
+            #log_echo "log" "${func_name}" "Untar the package \"${name}\" ${FAILED}!"
+            cd ${origin_path}
+            return 1
+        fi
+    fi
+    cd ${origin_path}
+    return 0
+}
+##########################################################
+#名称:validate_ip
+#功能:检验ip的有效性
+#参数:1.host_ip
+##########################################################
+function validate_ip
+{
+    #set -x
+    typeset func_name="validate_ip"
+    if [ $# -lt 1 ];then
+        log_echo "error" "${func_name}" "${PARAMATER_UNMACTCHED}"
+        return 1
+    fi
+    typeset host_ip=$1
+    typeset timeout="60"
+    if [ "X$2" != "X" ];then
+         timeout=$2
+    fi
+    #HP-UX/SunOS/Linux/AIX
+    typeset os=`uname`
+    typeset cmd=""
+    #对给定的ip进行校验
+       
+    if [ "X${PING}" = "X" ];then
+        log_echo "log" "${func_name}" "Can't find the \"ping\" command in the directory ${find_path_dir}!\nValidation the ftp server ip cancelled!"
+        return 0
+    fi
+        
+    case ${os} in
+    HP-UX)
+        cmd="${PING} ${host_ip} -n 3"
+    ;;
+    SunOS)
+        cmd="${PING} ${host_ip}"
+    ;;
+    AIX)
+        cmd="${PING} -c 3 ${host_ip}"
+    ;;
+    Linux)
+        cmd="${PING} -c 3 -w ${timeout} ${host_ip}"
+    ;;
+    *)
+        log_echo "error" "${func_name}" "Unknowable operating system \"${os}\",validate the ip ${FAILED}!"
+        return 1
+    ;;
+    esac
+    ${cmd} >${IDEPLOY_NULL}
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "The specified ip \"${host_ip}\" is invalidation!"
+        return 1
+    fi
+    return 0
+}
+
+#######################################################################
+#name:get_pkg_info()
+#func:方法登录ftp服务器的软件包存放目录，遍历软件包信息
+#args:1 host_ip   　ftp服务器ip
+#args:2 host_port   ftp服务器端口　
+#args:3 host_user   ftp用户名
+#args:4 host_pwd    ftp用户密码
+#args:5 store_path  软件包存放路径
+#######################################################################
+function get_pkg_info
+{
+ftp -inv <<EOF
+open $1 $2
+user $3 $4
+cd $5
+dir
+bye
+EOF
+}
+
+#sftp传输暂时不实现包过滤
+function pkg_filter_sftp
+{
+    typeset func_name="pkg_filter_sftp"
+    shift 6
+    RETURN[0]=$@
+}
+#######################################################################
+#name:pkg_filter
+#func:方法过滤掉已经存在的软件包
+#args:1 host_ip   　 ftp服务器ip
+#args:2 host_port    ftp服务器端口　
+#args:3 host_user    ftp用户名
+#args:4 host_pwd     ftp用户密码
+#args:5 pkg_path     软件包ftp服务器存放路径
+#args:6 store_path   软件包本地存放路径
+#args:7 pkg_list     要过滤的软件包列表
+#######################################################################
+function pkg_filter_ftp
+{  
+    #set -x
+    typeset func_name="pkg_filter"    
+    typeset local_size=0
+    typeset remote_size=0	
+    typeset temp_file=".ideploy_pkg_info_$$.log"
+    typeset temp_file2="${temp_file}2"
+    typeset info_list=""
+    typeset -i list_num=0
+    typeset -i i=1
+    typeset -i field_cur=0
+    typeset -i field_min=10000
+    
+
+    
+    typeset host_ip=$1
+    typeset host_port=$2
+    typeset host_user=$3
+    typeset host_pwd=$4
+    typeset pkg_path=$5
+    typeset local_path=$6
+    typeset org_ifs=$IFS
+    
+    get_pkg_info ${host_ip} ${host_port} ${host_user} ${host_pwd} ${pkg_path} > ${temp_file}
+    shift 6
+    typeset pkg_names=$@
+    
+    #临时文件不存在
+    if [ ! -r ${temp_file} ];then
+        log_echo "warn" "${func_name}" "Get ${temp_file} failed!"
+        RETURN[0]=${pkg_names}
+        return 0
+    fi
+    #将临时文件中的软件包信息和本地的软件包信息进行比较
+    TOTAL_FILE_SIZE=0
+    RETURN[0]="" 
+    IFS=,
+    for name in ${pkg_names}
+    do
+        if [ -f "${local_path}/${name}" ];then
+            local_size=`cat "${local_path}/${name}" | wc -c`
+        else
+            local_size=0
+        fi
+        #过滤临时文件中列表信息
+        cat ${temp_file} | $AWK -F"${name}" '$NF == "" {print $0}' > ${temp_file2}
+        list_num=`cat ${temp_file2}|wc -l`
+        #判断获取的记录行数
+        if [ ${list_num} -lt 1 ];then
+            #小于1说明没有匹配的文件
+            log_echo "err" "${func_name}" "Can't find file \"${name}\" on ftp server!"
+            rm ${temp_file}  >${IDEPLOY_NULL} 2>&1
+            rm ${temp_file2} >${IDEPLOY_NULL} 2>&1
+            return 1
+        fi
+        if [ ${list_num} -gt 1 ];then
+            while [ $i -le ${list_num} ]
+            do
+                field_cur=`cat ${temp_file2}|$SED -n ${i}p|$AWK '{print NF}'`
+                if [ ${field_cur} -lt ${field_min} ];then
+                    info_list=`cat ${temp_file2}|$SED -n ${i}p`
+                    field_min=${field_cur}
+                fi
+                ((i+=1))
+            done
+            #list_num、field_cur、field_min初始化为零
+            list_num=0
+            field_cur=0
+            field_min=0
+        else
+            info_list=`cat ${temp_file2}`
+        fi
+        #获取文件大小
+#            echo "============================"
+#            echo ${info_list}|$AWK '{print $5}'
+#            echo ${info_list}|$AWK '{print $4}'
+#            echo ${info_list}|$AWK '{print $3}'
+#            echo "============================"
+        is_integer `echo ${info_list}|$AWK '{print $2}'` >${IDEPLOY_NULL} 2>&1
+        if [ $? -ne 0 ];then
+            #第二个域不是数字，说明是MS-DOS样式，打印第三个域
+            remote_size=`echo ${info_list}|$AWK '{ print $3}'`
+        else
+            remote_size=`echo ${info_list}|$AWK '{ print $5}'`
+            is_integer ${remote_size} >${IDEPLOY_NULL} 2>&1
+            if [ $? -ne 0 ];then
+                remote_size=`echo ${info_list}|$AWK '{print $4}'`
+                is_integer ${remote_size} >${IDEPLOY_NULL} 2>&1
+                if [ $? -ne 0 ];then
+                    remote_size=`echo ${info_list}|$AWK '{print $3}'`
+                fi
+            fi
+        fi
+
+        is_integer ${remote_size} >${IDEPLOY_NULL} 2>&1
+        if [ $? -ne 0 ];then
+            log_echo "warn" "${func_name}" "Can't get size of file \"${name}\" on ftp server!"
+            remote_size=0
+        fi
+        
+        #处理软件包大小一致,或者获取文件大小失败,继续下一个文件
+        if [ ${local_size} -eq ${remote_size} ];then
+            log_echo "log" "${func_name}" "File \"${name}[${local_size}/${remote_size} byte(s)]\" is OK!"
+            continue
+        fi
+           
+        log_echo "info" "${func_name}" "Need to transfer file \"${name}[${local_size}/${remote_size} byte(s)]\" to \"`pwd`/${local_path}\"!"
+        
+        #计算需要传输的包的总大小
+        ((TOTAL_FILE_SIZE+=remote_size))
+
+        #将文件添加到列表
+        if [ "X${RETURN[0]}" = "X" ];then
+            RETURN[0]="${name}"
+        else
+            RETURN[0]=${RETURN[0]}",${name}"
+        fi    	
+    done
+    IFS=${org_ifs}
+    #删除temp文件
+    rm ${temp_file}  >${IDEPLOY_NULL} 2>&1
+    rm ${temp_file2} >${IDEPLOY_NULL} 2>&1
+    return 0   		
+}
+
+function ideploy_del
+{
+    #set -x 
+    typeset func_name="ideploy_del"
+#    typeset dir=$1
+    typeset ftpserver=$1
+#    typeset user=`id|$AWK -F\( '{print $2 }'|$AWK -F\) '{print $1}'`
+#    typeset home=`cat /etc/passwd|$AWK -F: -v name=${user} '{ if ( $1 == name ) print $6 }'`
+    #rm -r ${home}/tmp >${IDEPLOY_NULL} 2>&1
+    #将家目录下的三个公共库文件复制到script目录下，然后删除用户家目录下的文件
+    #--------------修改copy策略，只是将ideploy.inc文件copy到script目录下---------------------------------------------
+    #cp ${CUR_PATH}/ideploy_wrap.sh ${CUR_PATH}/ideploy.inc ${CUR_PATH}/comm_lib ${CUR_PATH}/${dir} >${IDEPLOY_NULL} 2>&1
+#    if [ -d ${CUR_PATH}/${dir} ] ;then
+#        cp ${CUR_PATH}/ideploy.inc ${CUR_PATH}/${dir} >${IDEPLOY_NULL} 2>&1
+#    fi
+    #----------------------------------------------------------------------------------------------------------------
+    rm ${CUR_PATH}/ideploy_wrap.sh ${CUR_PATH}/ideploy.inc ${CUR_PATH}/comm_lib ${CUR_PATH}/${CONFIG} ${CUR_PATH}/${ftpserver} >${IDEPLOY_NULL} 2>&1
+   
+    return 0
+}
+
+function set_constants
+{
+    #set -x
+    typeset func_name="set_constants"
+    if [ $# -ne 3 ];then
+        log_echo "error" "${func_name}" "${PARAMATER_UNMACTCHED}"
+        return 1
+    fi
+    CUR_PATH=$1
+    PKG_PATH=${CUR_PATH}/$2
+    CONFIG=$3
+    CONFIG=`echo ${CONFIG}|$AWK -F\. '{ if ( $NF == "ftpserver" || $NF == "FTPSERVER" ) print substr($0,0,(length($0)-length($NF))) }'`
+    CONFIG="${CONFIG}properties"
+
+#    SCRIPT_DIR=${PKG_PATH}/script
+    CONFIG_DIR=${PKG_PATH}/conf
+#    CONFIG=`ls ${CUR_PATH}|$GREP -i ${CONFIG}$`
+#    if [ "X${CONFIG}" = "X" ];then
+#        log_echo "log" "${func_name}" "Can't find the \"${CONFIG}\"!"
+#        return 1
+#    fi
+
+#-------------------delete exist constants--------------------------
+#    "${SED}" '/^CUR_PATH/d'  "${CUR_PATH}"/ideploy.inc > "${CUR_PATH}"/ideploy.inc.bak    
+#    "${SED}" '/^PKG_PATH/d'  "${CUR_PATH}"/ideploy.inc.bak > "${CUR_PATH}"/ideploy.inc
+#    "${SED}" '/^CONFIG_DIR/d'  "${CUR_PATH}"/ideploy.inc > "${CUR_PATH}"/ideploy.inc.bak
+#    "${SED}" '/^CONFIG/d'  "${CUR_PATH}"/ideploy.inc.bak > "${CUR_PATH}"/ideploy.inc
+#    "${SED}" '/^IDEPLOY_CUR_PATH/d'  "${CUR_PATH}"/ideploy.inc > "${CUR_PATH}"/ideploy.inc.bak
+#    "${SED}" '/^IDEPLOY_PKG_PATH/d'  "${CUR_PATH}"/ideploy.inc.bak > "${CUR_PATH}"/ideploy.inc
+#    "${SED}" '/^IDEPLOY_CONFIG_DIR/d'  "${CUR_PATH}"/ideploy.inc > "${CUR_PATH}"/ideploy.inc.bak
+#    "${SED}" '/^IDEPLOY_CONFIG/d'  "${CUR_PATH}"/ideploy.inc.bak > "${CUR_PATH}"/ideploy.inc
+#    rm -f "${CUR_PATH}"/ideploy.inc.bak
+#-------------------for compatible forward--------------------------
+    echo "CUR_PATH=${CUR_PATH}" >> ${CUR_PATH}/ideploy.inc
+    echo "PKG_PATH=${PKG_PATH}" >> ${CUR_PATH}/ideploy.inc
+#    echo "SCRIPT_DIR=${SCRIPT_DIR}" >> ${CUR_PATH}/ideploy.inc
+    echo "CONFIG_DIR=${CONFIG_DIR}" >> ${CUR_PATH}/ideploy.inc
+#    echo "CONFIG=${CONFIG}" >> ${CUR_PATH}/ideploy.inc
+    echo "CONFIG=config.properties" >> ${CUR_PATH}/ideploy.inc
+#-------------------constants---------------------------------------
+    #the IDEPLOY_CUR_PATH usually point at the home path of user    
+    echo "IDEPLOY_CUR_PATH=${CUR_PATH}" >> ${CUR_PATH}/ideploy.inc
+    #usually point at the package directory under task id
+    echo "IDEPLOY_PKG_PATH=${PKG_PATH}" >> ${CUR_PATH}/ideploy.inc
+    #point at the conf directory
+    echo "IDEPLOY_CONFIG_DIR=${CONFIG_DIR}" >> ${CUR_PATH}/ideploy.inc
+    #point at the config file which always has properties as suffix 
+#    echo "IDEPLOY_CONFIG=${CONFIG}" >> ${CUR_PATH}/ideploy.inc
+    echo "IDEPLOY_CONFIG=config.properties" >> ${CUR_PATH}/ideploy.inc
+    return 0
+}
+
+###################################################################################################
+#name:set_check_constants
+#func:任务创建-检测项页面,下发检测脚本后的常量设置(注意与分发二次开发包时的处理不一致)
+#arg1:ideploy.inc文件路径(缺省的时候通过pwd获取)
+#arg2:相对当前路径的包路径("..")
+#arg3:配置文件名称(ip_user.properties)
+###################################################################################################
+function set_check_constants
+{
+    #set -x
+    typeset func_name="set_check_constants"
+    if [ $# -eq 2 ];then
+        CUR_PATH=`pwd`
+        PKG_PATH=${CUR_PATH}/$1
+        CONFIG=$2
+    elif [ $# -eq 3 ];then
+        CUR_PATH=$1
+        PKG_PATH=${CUR_PATH}/$2
+        CONFIG=$3
+    else
+        log_echo "error" "${func_name}" "${PARAMATER_UNMACTCHED}"
+        return 1
+    fi
+    
+#检查项常量设置,直接传入properties文件名称,不需要再处理CONFIG    
+#    CONFIG=`echo ${CONFIG}|$AWK -F\. '{ if ( $NF == "ftpserver" || $NF == "FTPSERVER" ) print substr($0,0,(length($0)-length($NF))) }'`
+#    CONFIG="${CONFIG}properties"
+#检查项常量设置,直接传入properties文件名称,不需要再处理CONFIG 
+    CONFIG_DIR=${PKG_PATH}/conf
+    
+#Begin:add by w106702 @ 20080624 问题单AR5D06113 添加将ip_user.properties文件复制成config.properties文件
+    #1.将conf目录下的properties文件move到当前目录
+    mv "${CONFIG_DIR}/${CONFIG}" "${PKG_PATH}/${CONFIG}"
+    #2.删除conf目录下的所有文件
+    rm ${CONFIG_DIR}/*.properties >${IDEPLOY_NULL} 2>&1
+    #3.将properties文件move回去
+    mv "${PKG_PATH}/${CONFIG}" "${CONFIG_DIR}/${CONFIG}"
+    #4.将ip_user.properties文件拷贝为config.properties文件
+    cp "${CONFIG_DIR}/${CONFIG}" "${CONFIG_DIR}/config.properties"
+    #5.将properties文件进行格式转换
+    convert_files "${CONFIG_DIR}"
+#End:add by w106702 @ 20080624 问题单AR5D06113 添加将ip_user.properties文件复制成config.properties文件
+
+#-------------------for compatible forward--------------------------
+    echo "CUR_PATH=${CUR_PATH}" >> ${CUR_PATH}/ideploy.inc
+    echo "PKG_PATH=${PKG_PATH}" >> ${CUR_PATH}/ideploy.inc
+    echo "CONFIG_DIR=${CONFIG_DIR}" >> ${CUR_PATH}/ideploy.inc
+    echo "CONFIG=config.properties" >> ${CUR_PATH}/ideploy.inc
+#-------------------constants---------------------------------------
+    echo "IDEPLOY_CUR_PATH=${CUR_PATH}" >> ${CUR_PATH}/ideploy.inc
+    echo "IDEPLOY_PKG_PATH=${PKG_PATH}" >> ${CUR_PATH}/ideploy.inc
+    echo "IDEPLOY_CONFIG_DIR=${CONFIG_DIR}" >> ${CUR_PATH}/ideploy.inc
+    echo "IDEPLOY_CONFIG=config.properties" >> ${CUR_PATH}/ideploy.inc
+    return 0
+}
+
+###################################################################################################
+#name:decrypt_ftp_pwd
+#func:对ftpserver文件中的ftp密码进行解密
+#arg1:ftp密码的密文
+###################################################################################################
+function decrypt_ftp_pwd
+{
+	typeset cipher=$1
+	typeset -i ascii_value=0
+	typeset temp_char=''
+	typeset plain=""
+	typeset org_ifs=${IFS}
+	
+	RETURN[0]=""
+	if [ "X${cipher}" = "X" ];then	  
+	    return 0;
+	fi
+	
+	IFS=.
+	for ascii_value in ${cipher}
+	do
+	    temp_char=`echo ${ascii_value} |awk '{printf("%c",$1)}'`
+	    plain="${plain}${temp_char}"
+	done
+	IFS=${org_ifs}
+	
+	RETURN[0]="${plain}"
+	return 0;
+}
+
+function get_script_pkg
+{
+    typeset func_name="get_script_pkg"
+    if [ $# -lt 2 ];then
+        log_echo "error" "${func_name}" "${PARAMATER_UNMACTCHED}"
+        return 1
+    fi
+    typeset paras="$@"
+    #有两种传输，ftp，sftp；默认使用ftp
+    typeset trans_protocal="ftp"
+    if [ "X$3" != "X" ];then
+        if [ "X$3" = "Xftp" -o "X$3" = "Xsftp" ];then
+            trans_protocal="$3"
+        else
+            log_echo "error" "${func_name}" "The trans protocol parameter[$3] must ftp or sftp!"
+            return 1
+        fi
+    else
+        paras="${paras} ${trans_protocal}"
+        
+    fi
+    
+    #1.前置处理
+    typeset cur_path=`pwd`
+    
+    set_constants ${cur_path} $1 $2
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "Set constants ${FAILED}!"
+        return 1
+    fi
+    
+    #2.发包
+    get_script ${paras}
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "Transport script pkg by ${trans_protocal} failed!"
+        return 1
+    fi
+    
+    #3.删除文件
+    ideploy_del $2
+}
+
+function get_apps_pkg
+{
+    typeset func_name="get_apps_pkg"
+    if [ $# -lt 2 ];then
+        log_echo "error" "${func_name}" "${PARAMATER_UNMACTCHED}"
+        return 1
+    fi
+    
+    typeset paras="$@"
+    #有两种传输，ftp，sftp；默认使用ftp
+    typeset trans_protocal="ftp"
+    if [ "X$3" != "X" ];then
+        if [ "X$3" = "Xftp" -o "X$3" = "Xsftp" ];then
+            trans_protocal="$3"
+        else
+            log_echo "error" "${func_name}" "The trans protocol parameter[$3] must ftp or sftp!"
+            return 1
+        fi
+    else
+        paras="${paras} ${trans_protocal}"
+    fi
+    
+    #1.前置处理
+    typeset cur_path=`pwd`
+    set_constants ${cur_path} $1 $2
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "Set constants ${FAILED}!"
+        return 1
+    fi
+    
+    #2.发包
+    get_apps ${paras}
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "Transport apps pkg by ${trans_protocal} failed!"
+        return 1
+    fi
+    
+    #3.删除文件
+    ideploy_del $2
+}
+
+function get_all_pkg
+{
+    typeset func_name="get_all_pkg"
+    if [ $# -lt 2 ];then
+        log_echo "error" "${func_name}" "${PARAMATER_UNMACTCHED}"
+        return 1
+    fi
+    
+    typeset paras="$@"
+    #有两种传输，ftp，sftp；默认使用ftp
+    typeset trans_protocal="ftp"
+    if [ "X$3" != "X" ];then
+        if [ "X$3" = "Xftp" -o "X$3" = "Xsftp" ];then
+            trans_protocal="$3"
+        else
+            log_echo "error" "${func_name}" "The trans protocol parameter[$3] must ftp or sftp!"
+            return 1
+        fi
+    else
+        paras="${paras} ${trans_protocal}"        
+    fi
+    
+    #1.前置处理
+    typeset cur_path=`pwd`
+    
+    set_constants ${cur_path} $1 $2
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "Set constants ${FAILED}!"
+        return 1
+    fi
+    
+    #2.发包
+    get_script ${paras}
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "Transport script pkg by ${trans_protocal} failed!"
+        return 1
+    fi
+    
+    get_apps ${paras}
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "Transport apps pkg by ${trans_protocal} failed!"
+        return 1
+    fi
+    
+    #3.删除文件
+    ideploy_del $2
+}
+###################################################################################################
+#name:get_apps
+#func:函数获取业务软件包.该方法是initiate方法拆开的后半部分，即获取业务软件包。
+#arg1:保存的路径
+#arg2:ftp配置文件名称
+###################################################################################################
+function get_apps
+{
+	#set -x
+    typeset func_name="get_apps"
+    if [ $# -ne 3 ];then
+        log_echo "error" "${func_name}" "${PARAMATER_UNMACTCHED}"
+        return 1
+    fi
+
+    typeset cur_path=`pwd`
+    typeset ideploy_dir=$1
+    typeset config_file=$2
+    typeset trans_potocol=$3
+    
+    #1.在开始前对ip_user.ftpserver和ip_user.properties文件是否存在进行检查，然后读取FTP相关信息
+    if [ ! -f ${config_file} -o `cat ${config_file}|wc -c` -lt 1 ];then
+        log_echo "error" "${func_name}" "The file \"${config_file}\" is inexistence or invaliable!"
+        return 1
+    fi
+    if [ ! -f ${CONFIG} -o `cat ${CONFIG}|wc -c` -lt 1 ];then
+        log_echo "error" "${func_name}" "The file \"${CONFIG}\" is inexistence or invaliable!"
+        return 1
+    fi
+
+    read_value "${CUR_PATH}/${config_file}" "${PKG_FTP}"
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "Read value of \"${PKG_FTP}\" from \"${CUR_PATH}/${config_file}\" ${FAILED}!"
+        return 1
+    fi
+    
+    #设置相关信息
+    ftp_info="${RETURN[0]}"
+    host_ip=`echo ${ftp_info}|$AWK -F, '{print $1}'`
+    user=`printf "%s" ${ftp_info}|$AWK -F, '{print $2}'`
+    mode=`echo ${ftp_info}|$AWK -F, '{print $3}'`
+    local_path=`echo ${ftp_info}|$AWK -F, '{print $4}'`
+    server_path=`echo ${ftp_info}|$AWK -F, '{print $5}'`
+    trans_port=`echo ${ftp_info}|$AWK -F, '{print $6}'`
+    passwd=`printf "%s" "${ftp_info}"|$AWK -F, '{print substr($0,length($1)+length($2)+length($3)+length($4)+length($5)+length($6)+7)}'`
+    #对ftp密码进行解密
+    decrypt_ftp_pwd "${passwd}"
+    passwd="${RETURN[0]}"
+    
+    #2.再次检查config_file是否存在，然后从中读取包列表信息
+    if [ ! -f "${CUR_PATH}/${config_file}" ];then
+        log_echo "error" "${func_name}" "${CUR_PATH}/${config_file} is inexistence,transfers interrupted!"
+        return 1
+    fi
+    
+    . "${CUR_PATH}/${config_file}"
+    file_name='${'$PKG_FTP_FILE'}'
+    file_name=`eval echo ${file_name}`
+
+    #add by w00106702 @ 20081128 将原始的文件列表分隔为两个文件列表，前者以bin模式传输，后者以asc模式传输
+    typeset splitMark=",${IDEPLOY_ASCII},"
+    typeset bin_file_name=`echo ${file_name} |$AWK -F${splitMark} '{print $1}'`
+    typeset asc_file_name=`echo ${file_name} |$AWK -F${splitMark} '{print $2}'`
+    if [ "X${asc_file_name}" != "X" ];then
+        file_name="${bin_file_name},${asc_file_name}"
+    else
+        file_name="${bin_file_name}"
+    fi
+        
+    #3.发包
+    log_echo "log" "${func_name}" "Deploy the software package ${START},please wait..."
+    
+    #若bin_file_name不为空，则使用bin模式进行发包
+	if [ "X${bin_file_name}" != "X" ];then
+        #过滤已经存在的bin软件包
+        pkg_filter_${trans_potocol} "${host_ip}" "${trans_port}" "${user}" "${passwd}" "${server_path}" "${local_path}" "${bin_file_name}" 
+        if [ $? -ne 0 ];then
+            log_echo "error" "${func_name}" "Get \"${bin_file_name}\" ${FAILED} when check the package list!"
+            return 1
+        fi
+		bin_file_name="${RETURN[0]}"
+		
+		if [ "X${bin_file_name}" != "X" ];then
+    		#以bin模式发包
+            log_echo "info" "${func_name}" "Get files \"${bin_file_name}\" by bin mode..."
+            transfer_file_via_${trans_potocol} "${host_ip}" "${user}" "${passwd}" "bin" "${local_path}" "${server_path}" "${trans_port}" "get" "${bin_file_name}"
+            if [ $? -ne 0 ];then
+                log_echo "error" "${func_name}" "Get file \"${bin_file_name}\" ${FAILED}!"
+                return 1
+            fi
+        fi
+    fi
+    
+    #若asc_file_name不为空，则使用asc模式进行发包
+    if [ "X${asc_file_name}" != "X" ];then
+        #过滤已经存在的asc软件包
+        pkg_filter_${trans_potocol} "${host_ip}" "${trans_port}" "${user}" "${passwd}" "${server_path}" "${local_path}" "${asc_file_name}" 
+        if [ $? -ne 0 ];then
+            log_echo "error" "${func_name}" "Get \"${asc_file_name}\" ${FAILED} when check the package list!"
+            return 1
+        fi
+		asc_file_name="${RETURN[0]}"
+		
+		if [ "X${asc_file_name}" != "X" ];then
+        	#以asc模式发包
+        	log_echo "info" "${func_name}" "Get files \"${asc_file_name}\" by ascii mode..."
+            transfer_file_via_${trans_potocol} "${host_ip}" "${user}" "${passwd}" "ascii" "${local_path}" "${server_path}" "${trans_port}" "get" "${asc_file_name}"
+            if [ $? -ne 0 ];then
+                log_echo "error" "${func_name}" "Get files \"${asc_file_name}\" ${FAILED}!"
+                return 1
+            fi
+        fi
+    fi
+
+    if [ "X${bin_file_name}" = "X" -a "X${asc_file_name}" = "X" ];then
+        log_echo "info" "${func_name}" "No package need to transport!"
+    fi
+    
+    #检查是否需要发的包均以发送
+    typeset old_ifs=$IFS
+    IFS=,
+    for f in ${file_name}
+    do
+        if [ ! -f "${f}" ];then
+            log_echo "error" "${func_name}" "Can't find the package \"${f}\".Transfer packages failed!"
+            return 1
+        fi
+    done
+    IFS=${old_ifs}
+    
+    log_echo "log" "${func_name}" "Deploy the software package ${SUCCESSFUL}!"
+
+
+}
+
+###################################################################################################
+#name:get_script
+#func:函数获取二次开发脚本包.该方法是initiate方法拆开的前半部分，即获取二次开发包。
+#arg1:保存的路径
+#arg2:ftp配置文件名称
+###################################################################################################
+function get_script
+{
+	#set -x
+    typeset func_name="get_script"
+    if [ $# -lt 3 ];then
+        log_echo "error" "${func_name}" "${PARAMATER_UNMACTCHED}"
+        return 1
+    fi
+
+    typeset cur_path=`pwd`
+    typeset ideploy_dir=$1
+    typeset config_file=$2
+    typeset trans_potocol=$3
+
+#Begin:add by w00106702 @ 2008-09-28 在开始前对ip_user.ftpserver和ip_user.properties文件是否存在进行检查
+    if [ ! -f ${config_file} -o `cat ${config_file}|wc -c` -lt 1 ];then
+        log_echo "error" "${func_name}" "The file \"${config_file}\" is inexistence or invaliable!Transfer script package failed!"
+        return 1
+    fi
+    if [ ! -f ${CONFIG} -o `cat ${CONFIG}|wc -c` -lt 1 ];then
+        log_echo "error" "${func_name}" "The file \"${CONFIG}\" is inexistence or invaliable!Transfer script package failed!"
+        return 1
+    fi
+#End:add by w00106702 @ 2008-09-28 在开始前对ip_user.ftpserver和ip_user.properties文件是否存在进行检查
+    
+#1.创建目录.
+    make_dir "${ideploy_dir}"
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "Create directory \"${ideploy_dir}\" ${FAILED}!"
+        return 1
+    fi
+    
+#    typeset ping_path=""
+#    typeset ans=`which ping|$AWK -F\/ '/^\// { print $NF}'`
+#    if [ "X${ans}" != "Xping" ];then
+#        log_echo "log" "${func_name}" "Try to find the \"ping\" command,please wait..."
+#        for ping_path in ${find_path_dir}
+#        do
+#            PING=`find ${ping_path} -name ping 2>${IDEPLOY_NULL}|$AWK '/^\// { print $0 }'` 
+#            if [ "X${PING}" != "X" ];then
+#                break
+#            fi
+#        done
+#    else
+#        PING="ping"    
+#    fi
+   
+#2.从ftp_server上获取二次开发包,并解压
+    typeset ftp_info=""
+    typeset host_ip=""
+    typeset user=""
+    typeset passwd=""
+    typeset file_name=""
+    typeset mode=""
+    typeset local_path=""
+    typeset server_path=""
+    typeset trans_port=""
+    
+    #获取ftp信息
+    read_value "${CUR_PATH}/${config_file}" "${IDEPLOY_FTP}"
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "Read value of \"${IDEPLOY_FTP}\" from \"${CUR_PATH}/${config_file}\" ${FAILED}!"
+        return 1
+    fi
+    ftp_info="${RETURN[0]}"
+    host_ip=`echo ${ftp_info}|$AWK -F, '{print $1}'`
+    user=`printf "%s" ${ftp_info}|$AWK -F, '{print $2}'`
+    mode=`echo ${ftp_info}|$AWK -F, '{print $3}'`
+    local_path=${ideploy_dir}
+    server_path=`echo ${ftp_info}|$AWK -F, '{print $5}'`
+    trans_port=`echo ${ftp_info}|$AWK -F, '{print $6}'`
+    passwd=`printf "%s" "${ftp_info}"|$AWK -F, '{print $7}'`
+    #对ftp密码进行解密   
+    decrypt_ftp_pwd "${passwd}"
+    passwd="${RETURN[0]}"
+    
+    #typeset cur_path=`pwd`
+    #local_path="${cur_path}/${local_path}"
+    #获取文件
+    read_value "${CUR_PATH}/${config_file}" "${IDEPLOY_FTP_FILE}"
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "Read value of \"${IDEPLOY_FTP_FILE}\" from \"${CUR_PATH}/${config_file}\" ${FAILED}!"
+        return 1
+    fi
+    file_name="${RETURN[0]}"
+    
+    log_echo "log" "${func_name}" "Deploy the ideploy.tar ${START},please wait..."
+    
+    transfer_file_via_${trans_potocol} "${host_ip}" "${user}" "${passwd}" "${mode}" "${local_path}" "${server_path}" "${trans_port}" "get" "${file_name}"
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "Get file \"${file_name}\" ${FAILED}!"
+        return 1
+    fi
+    
+    #log_echo "log" "${func_name}" "Deploy the ideploy.tar ${SUCCESSFUL}!"
+    
+    #解压二次开发包
+    untar_pkg "${local_path}/${file_name}"
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "Untar the file \"`pwd`/${local_path}/${file_name}\" ${FAILED}!"
+        return 1
+    fi
+    
+    #设置目录权限
+#begin：modified by weiyigang @ 2007-8-9/10:08 : 避免某些主机上由于通配符的问题造成权限修改失败
+    #chmod -R +x ${local_path}/script/*
+    chmod -R +x ${CUR_PATH}/${ideploy_dir}/script
+#end  : modified by weiyigang @ 2007-8-9/10:08     
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "Change mode for script(s) ${FAILED}!"
+        return 1
+    fi
+#set -x    
+    #将properties文件拷贝至conf目录下
+#    if [ -f ${CUR_PATH}/${CONFIG} -a -d ${CONFIG_DIR} ];then
+#        rm ${CONFIG_DIR}/*.properties
+#        cp "${CUR_PATH}/${CONFIG}" "${CONFIG_DIR}/${CONFIG}"
+#        if [ $? -ne 0 ];then
+#            log_echo "log" "${func_name}" "Copy the \"${CONFIG}\" ${FAILED}!"
+#            return 1
+#        fi
+#    fi
+#B36修改properties处理流程如下：
+    if [ ! -f ${CONFIG_DIR}/${CONFIG} ];then 
+        log_echo "error" "${func_name}" "The properties file \"${CONFIG_DIR}/${CONFIG}\" can not found!"
+        return 1
+    else
+        #1.将conf目录下的properties文件move到当前目录
+        mv "${CONFIG_DIR}/${CONFIG}" "${CUR_PATH}/${CONFIG}"
+        #2.删除conf目录下的所有properties文件
+        rm ${CONFIG_DIR}/*.properties >${IDEPLOY_NULL} 2>&1
+        #3.删除conf目录下的所有ftpserver文件,ftpserver文件不一定存在
+        rm ${CONFIG_DIR}/*.ftpserver >${IDEPLOY_NULL} 2>&1
+        #4.将properties文件move回去
+        cp "${CUR_PATH}/${CONFIG}" "${CONFIG_DIR}/${CONFIG}"
+        #5.将ip_user.properties文件拷贝为config.properties文件
+        cp "${CONFIG_DIR}/${CONFIG}" "${CONFIG_DIR}/config.properties"
+        #6.将properties文件进行格式转换
+        convert_files "${CONFIG_DIR}"
+    fi
+    
+#获取dispatch包
+    #判断ftpserver文件中是否含有DISPATCH_FTP和DISPATCH_FTP_FILE键
+    typeset has_dispatch="N"
+    if [ ! -f ${CUR_PATH}/${config_file} ];then
+        log_echo "warn" "${func_name}" "${CUR_PATH}/${config_file} is inexistence,tranfers interrupted!"
+    else
+        typeset count1=`cat ${CUR_PATH}/${config_file}|$AWK -F= -v key="${DISPATCH_FTP}" '{ if ( $1 == key ) print $0 }' |wc -l`
+        if [ $? -eq 0 -a ${count1} -eq 1 ];then
+            typeset count2=`cat ${CUR_PATH}/${config_file}|$AWK -F= -v key="${DISPATCH_FTP_FILE}" '{ if ( $1 == key ) print $0 }' |wc -l`
+            if [ $? -eq 0 -a ${count2} -eq 1 ];then
+                has_dispatch="Y"
+            fi
+        fi
+    fi
+    
+    #判断ftpserver文件中是否含有dispatch键,若没有则不进行操作
+    if [ "X${has_dispatch}" = "XY" ];then
+        #读取dispatch_ftp信息
+        read_value "${CUR_PATH}/${config_file}" "${DISPATCH_FTP}"
+        if [ $? -ne 0 ];then
+            log_echo "error" "${func_name}" "Read value of \"${DISPATCH_FTP}\" from \"${CUR_PATH}/${config_file}\" ${FAILED}!"
+            return 1
+        fi
+        ftp_info="${RETURN[0]}"
+        host_ip=`echo ${ftp_info}|$AWK -F, '{print $1}'`
+        user=`printf "%s" ${ftp_info}|$AWK -F, '{print $2}'`
+        #passwd=`printf "%s" ${ftp_info}|$AWK -F, '{print $3}'`
+        mode=`echo ${ftp_info}|$AWK -F, '{print $3}'`
+        local_path=`echo ${ftp_info}|$AWK -F, '{print $4}'`
+        server_path=`echo ${ftp_info}|$AWK -F, '{print $5}'`
+        trans_port=`echo ${ftp_info}|$AWK -F, '{print $6}'`
+        passwd=`printf "%s" "${ftp_info}"|$AWK -F, '{print substr($0,length($1)+length($2)+length($3)+length($4)+length($5)+length($6)+7)}'`
+        #对ftp密码进行解密
+        decrypt_ftp_pwd "${passwd}"
+        passwd="${RETURN[0]}"
+               
+        #获取dispatch包
+        read_value "${CUR_PATH}/${config_file}" "${DISPATCH_FTP_FILE}"
+        if [ $? -ne 0 ];then
+            log_echo "error" "${func_name}" "Read value of \"${DISPATCH_FTP_FILE}\" from \"${CUR_PATH}/${config_file}\" ${FAILED}!"
+            return 1
+        fi
+        file_name="${RETURN[0]}"
+        
+        log_echo "log" "${func_name}" "Deploy the dispatch package ${START},please wait..."
+        
+        transfer_file_via_${trans_potocol} "${host_ip}" "${user}" "${passwd}" "${mode}" "${local_path}" "${server_path}" "${trans_port}" "get" "${file_name}"
+        if [ $? -ne 0 ];then
+            log_echo "error" "${func_name}" "Get file \"${file_name}\" ${FAILED}!"
+            return 1
+        fi 
+        
+        log_echo "log" "${func_name}" "Deploy the dispatch package ${SUCCESSFUL}!"
+        
+        #将dispatch包解压至cfgdispatch目录
+        typeset dis_dir="cfgdispatch"
+        make_dir "${ideploy_dir}/${dis_dir}"
+        if [ $? -ne 0 ];then
+            log_echo "error" "${func_name}" "Create directory \"${ideploy_dir}/${dis_dir}\" ${FAILED}!"
+            return 1
+        fi
+        
+        mv "${CUR_PATH}/${ideploy_dir}/${file_name}" "${CUR_PATH}/${ideploy_dir}/${dis_dir}/${file_name}"
+        untar_pkg "${CUR_PATH}/${ideploy_dir}/${dis_dir}/${file_name}"
+        if [ $? -ne 0 ];then
+            #log_echo "log" "${func_name}" "Untar the file \"${file_name}\" ${FAILED}!"
+            log_echo "error" "${func_name}" "Untar the file \"${CUR_PATH}/${ideploy_dir}/${dis_dir}/${file_name}\" ${FAILED}!"
+            return 1
+        fi
+        
+        rm "${CUR_PATH}/${ideploy_dir}/${dis_dir}/${file_name}"
+		#Begin,A01E33014,2007-06-13,weiyigang 60021464        
+        #文件格式转换
+        convert_files "${CUR_PATH}/${ideploy_dir}/${dis_dir}"
+        if [ $? -ne 0 ];then
+            log_echo "error" "${func_name}" "Convert format for \"${CUR_PATH}/${ideploy_dir}/${dis_dir}\" ${FAILED}!"
+            return 1
+        fi
+        log_echo "log" "${func_name}" "Convert format for \"${CUR_PATH}/${ideploy_dir}/${dis_dir}\" ${SUCCESSFUL}!"
+		#End,A01E33014,2007-06-13,weiyigang 60021464        
+    fi
+    
+    #将添加过全局变量的ideploy.inc文件拷贝到script目录下
+    if [ ! -f "${CUR_PATH}/ideploy.inc" ];then
+        log_echo "error" "${func_name}" "The \"${CUR_PATH}/ideploy.inc\" is inexistence,please try again!"
+        return 1
+    fi
+    
+    if [ -d "${ideploy_dir}/script" ] ;then
+        #cp ${CUR_PATH}/ideploy.inc ${ideploy_dir}/script >${IDEPLOY_NULL} 2>&1
+        cp ${CUR_PATH}/ideploy.inc ${ideploy_dir}/script
+    fi
+    
+#Begin:add by w00106702 @ 2008-09-28 在结束后对script、conf、cfgdispatch目录进行检查
+
+    if [ ! -d "conf" ];then
+        log_echo "error" "${func_name}" "The directory \"conf\" is inexistence!Transfer script package failed!"
+        return 1
+    fi
+    
+    if [ ! -d "script" ];then
+        log_echo "error" "${func_name}" "The directory \"script\" is inexistence!Transfer script package failed!"
+        return 1
+    fi
+    
+    if [ "X${has_dispatch}" = "XY" -a ! -d "cfgdispatch" ];then
+        log_echo "error" "${func_name}" "The directory \"cfgdispatch\" is inexistence!Transfer script package failed!"
+        return 1
+    fi
+    
+    log_echo "log" "${func_name}" "Deploy the ideploy.tar ${SUCCESSFUL}!"
+#End:add by w00106702 @ 2008-09-28 在结束后对script、conf、cfgdispatch目录进行检查
+}
+
+function transfer_file_via_sftp
+{
+    typeset func_name="transfer_file_via_sftp"
+    if [ $# -lt 4 ];then
+        log_echo "error" "${func_name}" "${PARAMETER_UNMACTCHED}!"
+        return 1
+    fi
+    
+    typeset ftp_server_ip=$1
+    typeset ftp_user=$2
+    typeset ftp_passwd=$3
+    typeset ftp_mode=$4    
+    typeset local_path=$5
+    typeset server_path=$6
+    typeset trans_port=$7
+    typeset trans_type=$8
+    shift 8
+    typeset file_names=$@
+    
+    
+    if [ "X${file_names}" = "X" ];then
+        log_echo "warn" "${func_name}" "No files need to transport!"
+        return 0
+    fi
+    
+    #替换逗号为" "
+    #file_names=`echo ${file_names}|$SED 's/,/" "/g'`
+    typeset org_file_names=${file_names}
+    #file_names=`echo '"'${file_names}'"'`
+    
+    #调用exp脚本
+    log_echo "info" "${func_name}" "Send files by exp script,please wait..."
+    ./ideploy_sftp.exp ${ftp_server_ip} ${ftp_user} ${ftp_passwd} ${local_path} ${server_path} ${trans_port} ${trans_type} "${file_names}"
+    if [ $? -ne 0 ];then
+        log_echo "error" "${func_name}" "Get files via sftp ${FAILED}!"
+        return 1
+    fi
+    
+    #如果是以ascii模式传输
+    if [ "Xascii" = "X${ftp_mode}" ];then
+        typeset org_ifs=$IFS
+        IFS=,
+        for f in ${org_file_names}
+        do
+            #f=`echo ${f} | ${AWK} -F\" '{print $2}'`
+            convert "${local_path}/${f}"
+        done
+        ISF=${org_ifs}
+    fi
+}
+
+#------------------------------------------------------
+#判断指定的字符串是否是非负整数
+#被check_fsys调用
+#------------------------------------------------------
+function is_integer
+{
+	#set -x
+	typeset func_name="is_integer"
+    if [ $# -ne 1 ];then
+        log_echo "error" "${func_name}" "${PARA_UNMATCHED}"
+        return 1
+    fi
+	typeset string=$1
+	string=`echo ${string}`
+
+    #检查字符串中是否含有非数字的字符
+	nstring=`echo ${string} | $SED 's/[0-9][0-9]*//g'`
+	nlen="`echo ${nstring} | $AWK '{print length($0)}'`"
+	if [ "X${nlen}" != "X0" ]; then
+	  	 log_echo "error" "${func_name}" "The number \"${string}\" is not a positive integer"
+	  	 return 1
+	else
+#		nlen=${#string}
+#		#最大的整数定为2147483647
+#		#检查字符串长度是否大于10位
+#		if [ ${nlen} -gt 10 ];then
+#			log_echo "error" "${func_name}" "The number \"${string}\" overflow max_integer 2147483647"
+#			return 1
+#		fi
+#		#检查字符串长度等于十位的时候是否大于最大整数
+#		if [ ${nlen} -eq 10 ];then
+#			if [[ ${string} > "2147483647" ]];then
+#				log_echo "error" "${func_name}" "The number \"${string}\" overflow max_integer 2147483647"
+#				return 1			
+#			else
+#				return 0
+#			fi
+#		#字符串长度小于十位的情况
+#		else		
+#			return 0	
+#		fi	
+        return 0
+	fi
+}
+
+#Begin,A01E33014,2007-06-13,weiyigang 60021464
+#------------------------------------------------------
+#转换文件格式,将windows上文本文件转换成Unix上的文本文件
+# tr –d '\015' <xx.c >xx.new 或tr –s '\015' '\n' <xx.c > xx.new
+#------------------------------------------------------
+function convert_files
+{
+    typeset func_name="convert_files"
+    #判断参数是目录还是文件
+    typeset param=$1
+    typeset files=""
+    typeset f=""
+    typeset ret=0
+    if [ -d ${param} ];then
+        search_dir ${param}
+        if [ $? -ne 0 ];then
+            log_echo "error" "${func_name}" "Search files under directory \"${param}\" ${FAILED}!"
+            return 1
+        fi
+        files="${RETURN[0]}"
+        for f in ${files}
+        do
+            convert ${f}
+            if [ $? -ne 0 ];then
+                log_echo "error" "${func_name}" "Change file format of \"${f}\" ${FAILED}!"
+                ret=1
+            fi
+        done
+        if [ ${ret} -eq 1 ];then
+            return 1
+        fi
+    else
+        #不是目录
+        convert ${param}
+        if [ $? -ne 0 ];then
+            log_echo "error" "${func_name}" "Change file format of \"${file_name}\" ${FAILED}!"
+            return 1
+        fi
+    fi
+    return 0
+}
+
+function search_dir
+{
+    typeset func_name="search_dir"
+    typeset dir_path="$1"
+    typeset files=""
+    files=`du -a ${dir_path}|$AWK '{print $2}'`
+    RETURN[0]=${files}
+    return 0
+}
+
+function convert
+{
+    typeset func_name="convert_file"
+    typeset file_name="$1"
+    #进行转换
+    #如果传入的参数不是文件,直接返回
+    if [ ! -f ${file_name} ];then
+        return 0
+    fi
+    tr -d '\015' < ${file_name} >${file_name}_new
+    if [ $? -ne 0 ];then
+        return 1
+    fi
+    #删除旧文件,将更新的文件改名
+    rm ${file_name}
+    if [ $? -ne 0 ];then
+        return 1
+    fi
+    mv ${file_name}_new ${file_name}
+    if [ $? -ne 0 ];then
+        return 1
+    fi
+    return 0
+}
+#End,A01E33014,2007-06-13,weiyigang 60021464
+
+
+
+#实现cofigure file 的访问和修改功能，供shell文件包含
+
+#####################BEGIN Of Interface############################
+
+#cfg_is_exist_sec			在段键格式文件中是否存在一个段
+#cfg_get_sec_names			返回段键配置文件的多个段的名字
+#cfg_get_sec_value			返回段键格式某个段下的值(包含键名并去掉注释)
+#cfg_is_exist_sec_key		在段键格式文件中查找一个段下的键是否存在
+#cfg_add_sec_key			在段键格式文件中的某个字段下添加一个key
+#cfg_get_sec_key_value		在段键格式文件中获取一个段下的键的值(如果键有多个则返回第一个值)
+#cfg_get_sec_key_values     在段键格式文件中获取一个段下的键的值(如果键有多个则返回多个值)
+#cfg_update_sec_key_value	向段键配置文件中更新某个配置项
+#cfg_get_sec_key_names		返回段键格式中某个段中的所有键名
+#cfg_write_sec_key_value	写入一个键(键不存在添加,存在则覆盖)(是组合操作,组合update和add操作)
+#cfg_update_ini             用source_file中键的值替换dest_file中相应键的值
+###################END Of Interface #####################################
+
+
+
+####################BEGIN OF DEPEND ON ##################################
+#file.inc
+#err.inc
+#env.inc
+#file.inc
+#ret.inc
+################### END OF DEPEND ON ####################################
+
+
+###################################ret.in BEGIN##############################
+#实现返回值功能，供shell文件包含
+#ret.inc
+#interface:
+#ret_init		初始化RETURN数组,清空RETURN数组的元素的值
+#ret_set_num	设置RETURN数组的项数
+#ret_set_one	设置第一个参数RETURN[0]的值
+#############################################################################
+
+#使用例子:
+#  在被调用函数中:
+#		called_function()
+#		{
+#			....  
+#			ret_init
+#			ret_set_num	2 	#有两个变量
+#			RETURN[0]="output1"
+#			RETURN[1]="output2"
+#			return 0
+#		}
+#  在调用函数中:
+#		called_function
+#		if [ $? -ne 0 ]; then
+#			#此处可通过RETNUM和RETURN获取返回的信息
+#		fi
+###############################################################
+#   Name:          ret_init
+#   Description:    初始化RETURN数组,清空RETURN数组的元素的值
+#   input:	无
+#   output:	无
+#   return:
+#		$SUCC 成功
+################################################################
+function ret_init
+{
+	typeset i=0
+	
+	ret_clear
+
+	RETNUM=0		# 数组的元素个数
+	RETURN[0]=""		# 数组
+	return $SUCC
+}
+
+###############################################################
+#   Name:          ret_set_num
+#   Description:   设置RETURN数组的项数
+#   input:
+#  		   1. number 项数
+#   output:	   无
+#   return:
+#   	           $SUCC 			成功 
+#	           $ERR_TYP_NOT_INTEGER 	不是整型数据
+#	           $PARA_ERROR 			参数错误 
+################################################################
+function ret_set_num
+{
+	if [ $# -ne 1 ];then
+		return $PARA_ERROR
+	fi
+	assert_not_empty "$1"
+	
+	typeset  number="$1"
+	
+	is_integer $number
+	if [ $? -ne 0 ]; then
+		return $ERR_TYP_NOT_INTEGER
+	fi
+	assert_not_negative "$number"  "ret_set_num:ret number isn't negative"
+
+	
+	#清空数组
+	ret_clear
+		
+	RETNUM="$number"
+	if [ "-$RETNUM" = "-" ]; then
+		RETNUM=1
+	fi
+	return $SUCC
+}
+
+###############################################################
+#   Name:          ret_clear
+#   Description:   清空RETURN数组
+#   input:	   无
+#   output:	   无
+#   return:
+#   	           $SUCC: 成功
+################################################################
+function ret_clear
+{
+	typeset i=0
+	# 清空数组
+	if [ "-$RETNUM" != "-" ]; then
+		while [ $i -lt $RETNUM ]
+		do
+			RETURN[i]=""
+			((i=i+1))
+		done
+	fi	
+	return $SUCC
+}
+
+###############################################################
+#   Name:          ret_set_one
+#   Description:   设置第一个参数RETURN[0]的值
+#   input:  1.参数值value
+#   output: 第一个参数RETURN[0]
+#   return:
+#   	$SUCC: 		成功
+#	$PARA_ERROR 	参数错误
+################################################################
+function ret_set_one
+{
+	if [ $# -ne 1 ];then
+		return $PARA_ERROR
+	fi
+	assert_not_empty "$1"
+		
+	typeset  value="$@"
+	
+	ret_clear
+	ret_set_num  1
+	RETURN[0]="$value"
+	
+	return $SUCC	
+}
+###########################ret.inc END############################
+
+############################func.inc BEGIN###############################
+#########################################################################
+#调用函数和外部命令,不需要/无法跟踪函数或外部命令内部的执行过程时使用
+#函数名：func_exec_func
+#input:
+#  1. cmd   函数名/命令名
+#  *. paras 参数
+#########################################################################
+function func_exec_func
+{
+	typeset	cmd="$1"	#待执行命令名
+	typeset ret=""
+		
+	shift 1
+	 
+	# 命令不能为空
+	assert_not_empty  "$cmd"
+			
+	#执行命令
+	$cmd "$@"
+	ret=$?
+		
+	#返回命令执行结果
+	return $ret
+}
+############################func.inc END###############################
+
+############################file.inc BEGIN#############################
+###############################################################################################
+#实现file的操作功能，供shell文件包含  
+# Interface:
+#  file_is_exist                 判断文件是否存在 
+#  file_get_lines_count          返回文件的行数
+#  file_replace_line_by_number   将文件的第n行替换为传入的字符串
+#  file_replace_line_by_exp      查找传入的表达式,得到行数n,将文件的第n行替换为传入的字符串
+#  file_insert_line              在文件指定行前插入指定字符串
+#  file_delete_line              删除文件指定行
+#  file_select_line              返回指定表达时所在行
+#  file_get_owner                返回文件的属主
+#  file_set_owner                设置文件属主
+#  file_is_executive             判断文件相对于某个用户是否可执行
+#  file_is_readable              判断文件相对于某个用户是否可读
+#  file_is_writeable             判断文件相对于某个用户是否可写
+#  file_create                   创建一个指定文件
+#  file_create_dir               创建一个指定目录
+#  file_copy                     拷贝文件(保证属主/属性)
+#  file_copy_dir                 拷贝目录(保证属主/属性)  
+#  file_dir_is_exist             判断目录是否存在
+#  file_grep                     返回符合表达式的所有行,即平时的 grep "exp" file 功能
+#  file_get_content              返回文件中所有行,要考虑行数过多的处理情况(比如5万行)
+#  file_get_content_filter_note  返回文件中所有非注释行(注释符号由调用者当参数传入)
+#  file_append_line              在文件尾部添加一行(保证属主/属性)
+#  file_get_size                 获取文件大小,bytes
+#################################################################################################
+
+##############################################################
+#   Name:           file_is_exist()
+#   Description:    判断文件是否存在
+#   Input:          
+#		1.	file name
+#		 
+#   Output: 
+#		
+#   Return:  
+#       YES--文件存在 
+#		NO--文件不存在
+#		PARA_ERROR
+##############################################################
+function file_is_exist
+{
+	if [ $# -ne 1 ];then
+		return $PARA_ERROR
+	fi
+	typeset file="$1"
+	
+		
+	#检查参数是否为空
+	assert_not_empty  "$file" "File name is null!"
+	
+	#判断文件是否为空
+	if [ -f "$file" ]
+	then
+		return "${YES}"
+	else
+		return "${NO}"
+	fi
+}
+
+##############################################################
+#   Name:           file_get_lines_count()
+#   Description:    返回文件的行数
+#   Input:          
+#		1.	file name
+#		 
+#   Output: 
+#		        RETURN[0](文件行数)
+#   Return:     SUCC--正常 
+#		        ERR_FILE_GET_LINES_ERROR--获取文件行数错误
+#				PARA_ERROR--------参数个数错误
+#				ERR_FILE_NOT_EXIST--文件不存在
+##############################################################
+function file_get_lines_count
+{
+    if [ $# -ne 1 ]
+    then
+    	return $PARA_ERROR
+    fi
+    
+    typeset file="$1"	
+	if [ ! -f $file ]
+	then
+		return $ERR_FILE_NOT_EXIST
+	fi
+		
+	#获取文件行数
+	typeset lines_count=`cat "$file" 2>${IDEPLOY_NULL} | wc -l 2>${IDEPLOY_NULL}`	
+	if [ $? -ne 0 ]
+	then
+	    return ${ERR_FILE_GET_LINES_ERROR}
+	fi
+	lines_count=`echo $lines_count`
+	
+	ret_set_one "${lines_count}"	
+	return "${SUCC}"
+}
+
+##############################################################
+#   Name:           file_get_line_num_by_str()
+#   Description:    返回文件的行数
+#   Input:          
+#		1.	file name
+#		2.      string
+#   Output: 
+#		        RETURN[0] RETURN[1] RETURN[2] ....(被找到的匹配字符串的行的line number)
+#			RETNUM   (文件行数)
+#   Return:     SUCC--正常 
+#		        ERR_FILE_GET_LINES_ERROR--获取文件行数错误
+#				PARA_ERROR--------参数个数错误
+#				ERR_FILE_NOT_EXIST--文件不存在
+##############################################################
+
+function file_get_line_number_by_str
+{
+	typeset no=""
+	typeset exp_str=""
+	typeset str=""
+
+	file_name="$1"
+	exp_str="$2"
+	shift 
+	shift
+	str="$@"	#(参数的剩余部分均是传入的字符串）	
+	
+	#检查参数是否为空，及文件是否存在
+	assert_not_empty  "$file_name"
+	assert_not_empty  "$exp_str"
+	#assert_file_exist "$file_name"
+
+	file_is_exist "$file_name"
+	if [ $? -ne 0 ];then
+		return "${ERR_FILE_NOT_EXIST}"
+	fi	
+		
+	# 修改 
+	# 如果该行为注释，则输出空行，（这样可以保持行数不变）
+	#no=`cat $file_name | ${AWK} '{if($0 ~ /^[ 	]*#/ ) {print "";}else{print $0;}}' | ${SED} -n "/$exp_str/=" | ${SED} -n '1p'`
+	no_list=`cat $file_name  | ${SED} -n "/$exp_str/=" | ${AWK} '{printf("%s ",$1);}'`
+	if [ "X$no_list" = "X" ]; then		
+		return "${ERR_FILE_GET_LINES_ERROR}"
+	fi
+	
+	typeset -i line_sum=0
+	for num in $no_list
+	do
+		RETURN[$line_sum]=$num
+		((line_sum+=1))
+	
+	done
+	RETNUM=$line_sum
+	
+	return 0
+
+
+}
+
+##############################################################
+#   Name:           file_replace_line_by_number()
+#   Description:    替换指定行号的号
+#   Input:          
+#		1.	file name
+#		2.  line no
+#       3.  express string
+#   Output: 
+#		
+#   Return:     SUCC--正常 
+#		        ERR_FILE_NOT_EXIST--文件不存在
+#               ERR_FILE_GET_LINES_ERROR--获取文件行数失败
+#               ERR_FILE_LINENO_TOO_GREAT--文件行数过大 
+#               ERROR--未知错误
+##############################################################
+function file_replace_line_by_number
+{
+	typeset file_name="$1"
+	typeset line_no="$2"
+	shift
+	shift
+	typeset str="$@"	#(参数的剩余部分均是传入的字符串）
+	
+	typeset max_line=""
+	typeset tmp_file=""
+	typeset no=""
+	
+	#检查参数是否为空，及文件是否存在
+	assert_not_empty  "$file_name"
+	assert_not_empty  "$line_no"
+	assert_not_empty  "$str"
+	#assert_file_exist "$file_name"
+	file_is_exist "$file_name"
+	if [ $? -ne 0 ];then
+		return "${ERR_FILE_NOT_EXIST}"
+	fi
+	
+	is_integer "$line_no"
+	if [ $? -ne 0 ]
+	then
+		return "${ERR_FILE_GET_LINES_ERROR}"
+	fi
+	
+	if [ $line_no -lt 1 ];then
+		return "${ERR_FILE_GET_LINES_ERROR}"
+	fi
+	
+	#获取文件行数
+	func_exec_func file_get_lines_count "$file_name"
+	if [ $? -ne 0 ]; then
+		return "${ERR_FILE_GET_LINES_ERROR}"
+	fi
+	max_line=`echo ${RETURN[0]}`
+	
+	if [ $line_no -gt $max_line ]; then		
+		return "${ERR_FILE_LINENO_TOO_GREAT}"
+	fi
+	
+	# 如果文件只有一行
+	if [ "$max_line" -eq 1 ]; then
+		echo "$str" > $file_name
+		return "${SUCC}"
+	fi
+	
+#	file_new_tmp
+#	tmp_file="${RETURN[0]}"
+	# 问题单a01d85894   安装过程临时文件过多   修改开始
+	cat << HERE | ed $file_name 1>${IDEPLOY_NULL} 2>&1
+	#cat << HERE | ed $file_name #>${IDEPLOY_NULL} 2>$tmp_file
+$line_no
+c
+$str
+.
+w
+q
+HERE
+	
+#	is_error_exist=`cat $tmp_file | wc -w | ${AWK} '{print $1}'`
+#	if [ $is_error_exist -gt 0 ];then
+#		return "${ERROR}"
+#	fi
+        # 问题单a01d85894   安装过程临时文件过多   修改开始
+
+	return "${SUCC}"
+}
+##############################################################
+#   Name: file_replace_line_by_exp          
+#   Description: 替换包含特定字符串的行   
+#   Input:          
+#		1.	file name
+#		2.  express string(要替换行包含的特征字符串)
+#       3.  express string(要替换的字符串)
+#		 
+#   Output: 
+#		
+#   Return:  
+#       SUCC--正常 
+#       ERR_FILE_NOT_EXIST--文件不存在
+#		ERR_FILE_GET_LINES_ERROR--获取文件行数错误
+#
+##############################################################
+function file_replace_line_by_exp
+{
+	typeset no=""
+	typeset exp_str=""
+	typeset str=""
+
+	file_name="$1"
+	exp_str="$2"
+	shift 
+	shift
+	str="$@"	#(参数的剩余部分均是传入的字符串）	
+	
+	#检查参数是否为空，及文件是否存在
+	assert_not_empty  "$file_name"
+	assert_not_empty  "$exp_str"
+	#assert_file_exist "$file_name"
+
+	file_is_exist "$file_name"
+	if [ $? -ne 0 ];then
+		return "${ERR_FILE_NOT_EXIST}"
+	fi	
+		
+	# 修改 
+	# 如果该行为注释，则输出空行，（这样可以保持行数不变）
+	#no=`cat $file_name | ${AWK} '{if($0 ~ /^[ 	]*#/ ) {print "";}else{print $0;}}' | ${SED} -n "/$exp_str/=" | ${SED} -n '1p'`
+	no_list=`cat $file_name  | ${SED} -n "/$exp_str/=" | ${AWK} '{printf("%s ",$1);}'`
+	if [ "X$no_list" = "X" ]; then		
+		return "${ERR_FILE_GET_LINES_ERROR}"
+	fi
+	##把找到的行数替换
+	for no in $no_list
+	do
+		file_replace_line_by_number  "$file_name"   "$no"   "$str"
+		ret=$?
+	done
+	
+	return "${ret}"
+}
+##########################################################################
+#函数名: file_insert_line()
+#
+#功能: 在文件指定行前插入指定字符串
+#输入:  1. file name 
+#       2. line no 
+#       3. expr string
+#	    
+#输出: 
+#     无
+#返回: 
+#     SUCC--正常 
+#	  ERR_FILE_NOT_EXIST--文件不存在
+#	  ERR_FILE_GET_LINES_ERROR－－获取行号错误，或者给出的行号参数有误
+#########################################################################
+function file_insert_line
+{	
+	typeset file_name=$1
+	typeset line_no=$2
+	typeset expr_str=$3
+	
+	#检查参数是否为空，及文件是否存在
+	assert_not_empty  "$file_name"
+	assert_not_empty  "$line_no"
+	assert_not_empty  "$expr_str"
+	
+	file_is_exist "$file_name"
+	if [ $? -ne 0 ];then
+		return "${ERR_FILE_NOT_EXIST}"
+	fi	
+	
+	is_integer $line_no
+	if [ $? -ne 0 ];then
+		return "${ERR_FILE_GET_LINES_ERROR}"
+	fi
+	
+	#获取文件行数
+	func_exec_func file_get_lines_count "$file_name"
+	if [ $? -ne 0 ]; then
+		return "${ERR_FILE_GET_LINES_ERROR}"
+	fi
+	max_line=`echo ${RETURN[0]}`
+		
+	if [ $line_no -lt 1 -o $line_no -gt `expr $max_line + 1` ];then
+		return "${ERR_FILE_GET_LINES_ERROR}"
+	fi
+	
+	if [ $line_no -le $max_line ]; then
+		cat << HERE | ed $file_name >${IDEPLOY_NULL} 2>&1
+$line_no
+i
+$expr_str
+.
+w
+q
+HERE
+	else
+		echo $expr_str >> $file_name
+	fi
+	
+	if [ $? -ne 0 ];then
+	     return "${FAILURE}"
+	fi
+	
+    return "${SUCC}"	
+}
+
+##############################################################
+#   Name: file_delete_line          
+#   功能: 删除文件指定行
+#   输入:  1. file name 
+#          2. line no 
+#	    
+#   输出: 
+#          无
+#   返回: 
+#          SUCC--正常 
+#          ERR_FILE_SED_PRINT--用sed命令打印文件失败
+#          ERR_FILE_NOT_EXIST
+#		   ERR_FILE_GET_LINES_ERROR
+##############################################################
+function file_delete_line
+{
+    typeset file_name=$1
+	typeset line_no=$2
+	typeset max_line=""
+	typeset line_no_aft=0
+	typeset line_no_bef=0
+	
+	#检查参数是否为空，及文件是否存在
+	assert_not_empty  "$file_name"
+	assert_not_empty  "$line_no"
+
+	file_is_exist "$file_name"
+	if [ $? -ne 0 ];then
+		return "${ERR_FILE_NOT_EXIST}"
+	fi	
+	
+	is_integer $line_no
+	if [ $? -ne 0 ];then
+		return "${ERR_FILE_GET_LINES_ERROR}"
+	fi
+	
+	#获取文件行数
+	func_exec_func file_get_lines_count "$file_name"
+	if [ $? -ne 0 ]; then
+		return "${ERR_FILE_GET_LINES_ERROR}"
+	fi
+	max_line=`echo ${RETURN[0]}`
+		
+	if [ $line_no -lt 1 -o $line_no -gt $max_line ];then
+		return "${ERR_FILE_GET_LINES_ERROR}"
+	fi
+	
+	cat << HERE | ed $file_name >${IDEPLOY_NULL} 2>&1
+$line_no
+d
+.
+w
+q	
+HERE
+
+	if [ $? -ne 0 ];then
+	     return "${FAILURE}"
+	fi
+	
+	return "${SUCC}"	
+}
+##############################################################
+#   Name: file_select_line          
+#   Description: 返回包含特征字符串的行的行号(多行的话,只返回第-行)   
+#   Input:          
+#		1.	file name
+#		2.  express string(待查找行包含的特征字符串)
+#   Output: 
+#		   RETURN[0](包含特征字符串的行的行号)
+#   Return:  
+#       SUCC--成功 
+#		ERR_GET_LINE_NO--获取文件行号失败
+#		ERR_CFG_FILE_NOT_EXIST--文件不存在
+#
+##############################################################
+function file_select_line
+{
+    typeset file_name=$1
+    typeset expr_str=$2
+    
+    #检查参数是否为空，及文件是否存在
+	assert_not_empty  "$file_name"
+	assert_not_empty  "$expr_str"
+	file_is_exist "$file_name"
+	if [ $? -ne 0 ];then
+		return ${ERR_CFG_FILE_NOT_EXIST}
+	fi
+	
+	#获取包含特定字符串的行号
+	line_no=`cat "${file_name}" | ${GREP} -n "$expr_str" | ${SED} -n '1p' | ${AWK} -F: '{print $1}'`
+	if [ "X$line_no" = "X" ]
+	then
+	    return "${ERR_GET_LINE_NO}"
+	fi
+	line_no=`echo $line_no`
+	
+	ret_set_one "${line_no}"
+	return "${SUCC}"
+}
+##############################################################
+#   Name:  file_get_owner         
+#   Description: 返回指定文件   
+#   Input:          
+#		1.	file name
+#		 
+#   Output: 
+#		   RETURN[0](文件属主)
+#          RETURN[1](文件所属群)
+#   Return:  
+#       SUCC--正常 
+#		ERR_FILE_GET_OWNER_FAIL--获取文件属主失败
+#       ERR_FILE_GET_GROUP_FAIL--获取文件所属组失败
+#
+##############################################################
+function file_get_owner
+{	
+	if [ $# -ne 1 ]
+	then
+		return $PARA_ERROR
+	fi
+	
+	typeset file=$1
+	
+	if [ ! -f $file -a ! -d $file ]
+	then
+		return $ERR_FILE_NOT_EXIST
+	fi
+	
+	typeset owner
+	typeset group
+	
+	#检查参数是否为空，及文件是否存在
+	assert_not_empty  "$file"
+	assert_file_exist "$file"	
+	
+	#获取文件属主
+	owner=`ls -dl "$file" 2>${IDEPLOY_NULL} | ${AWK} '{print $3}' 2>${IDEPLOY_NULL}`
+	if [ "X$owner" = "X" ]
+	then
+	    return "${ERR_FILE_GET_OWNER_FAIL}"
+	fi
+	group=`ls -dl "$file" 2>${IDEPLOY_NULL} | ${AWK} '{print $4}' 2>${IDEPLOY_NULL}`
+	if [ "X$group" = "X" ]
+	then
+	    return "${ERR_FILE_GET_GROUP_FAIL}"
+	fi
+	
+	ret_set_num 2
+	RETURN[0]="$owner"
+	RETURN[1]="$group"
+	return "${SUCC}"
+}
+##############################################################
+#   Name: file_set_owner          
+#   Description: 设置文件属主和组
+#   Input:          
+#		1.	file name
+#		2.  file owner
+#       3.  file group
+#   Output: 
+#		
+#   Return:  
+#       SUCC--修改成功
+#       ERR_FILE_CHG_OWNER_FAIL--改变文件属主错误
+##############################################################
+function file_set_owner
+{
+    typeset file=$1
+    typeset owner=$2
+    typeset group=$3
+	
+	#检查参数是否为空，及文件是否存在
+    assert_not_empty   "$file"
+    assert_not_empty   "$owner"
+    assert_not_empty   "$group"
+	assert_file_exist  "$file"	
+	assert_user_exist  "$owner"
+	assert_group_exist "$group"
+	
+	#修改文件属主
+	chown "${owner}:${group}" "$file"
+	if [ $? -ne 0 ]
+	then
+	    return "${ERR_FILE_CHG_OWNER_FAIL}"
+	fi	
+	return "${SUCC}"	
+}
+
+##############################################################
+#   Name: file_is_executive           
+#   Description: 判断文件相对于某个用户是否可执行   
+#   Input:          
+#		1.	file name
+#		2.  user name  
+#   Output: 
+#		
+#   Return:  
+#		YES--可执行
+#       NO--不可执行
+#		ERROR--- 错误
+##############################################################              
+function file_is_executive
+{
+    typeset file_name=$1 
+    typeset usr_name=$2
+    typeset owner_name=""
+    typeset user_group=""
+    typeset attr=""
+     
+    #检查参数是否为空，及文件是否存在
+    assert_not_empty  "$file_name"
+	assert_not_empty  "$usr_name"
+	assert_file_exist "$file_name"
+	
+	#返回文件属性
+	typeset tmp=`ls -dl "$file_name" 2>${IDEPLOY_NULL} | ${AWK} '{print $1}' 2>${IDEPLOY_NULL}`
+	tmp=`echo $tmp | tr -d 's'`
+	
+	#判断用户是否为root
+	if [ "X$usr_name" = "Xroot" ]
+	then
+	    
+	    return "${YES}"
+	fi
+	
+	#获取文件属主
+	func_exec_func file_get_owner "$file_name"
+	ret=$?
+	if [ "$ret" -ne 0 ]
+	then
+	    return "$ERROR"
+	fi
+    owner_name="${RETURN[0]}"
+    group_name="${RETURN[1]}"
+
+	#debug note
+	#返回用户所属组 //该函属还未实现
+	user_get_user_group "$usr_name"
+	if [ $? -ne 0 ]
+	then
+	    return $ERROR
+	fi
+	user_group="${RETURN[0]}"
+
+	#判断用户属性
+	if [ "X$usr_name" = "X$owner_name" ]
+	then
+	    #属主
+	    attr=0  
+	elif [ "X$user_group" = "X$group_name" ]
+	then
+	    #组
+	    attr=1
+  	else
+  	    #其它
+  	    attr=2
+  	fi
+
+	case $attr in
+	0)
+	  #当用户为属主时，判断文件相对其是否可写
+	  func_exec_func str_mid "$tmp"  "4"  "1"
+	  ret=$?
+	  if [ "$ret" -ne 0 ]
+	  then
+	      return "$ERROR"
+	  fi
+	  mark="${RETURN[0]}"	
+	  if [ "X$mark" = "Xx" ]
+	  then
+	      return "${YES}"
+	  else
+	      return "${NO}"
+	  fi
+	  ;;
+	1)
+	  #当用户为组时，判断文件相对其是否可写
+	  func_exec_func str_mid "$tmp"  "7"  "1"
+	  ret=$?
+	  if [ "$ret" -ne 0 ]
+	  then
+	      return "$ERROR"
+	  fi
+	  mark="${RETURN[0]}"	
+	  if [ "X$mark" = "Xx" ]
+	  then
+	      return "${YES}"
+	  else
+	      return "${NO}"
+	  fi
+	  ;;
+	2)
+	  #当用户为其他时，判断文件相对其是否可写
+	  func_exec_func str_mid "$tmp" "10"  "1"
+	  ret=$?
+	  if [ "$ret" -ne 0 ]
+	  then
+	      return "$ERROR"
+	  fi
+	  mark="${RETURN[0]}"	
+	  if [ "X$mark" = "Xx" ]
+	  then
+	      return "${YES}"
+	  else
+	      return "${NO}"
+	  fi
+	  ;;
+	*)
+	   :
+	esac  
+	return "${ERROR}"	
+}
+##############################################################
+#   Name: file_is_writeable          
+#   Description: 判断文件相对于某个用户是否可写    
+#   Input:          
+#		1.	file name
+#		2.  user name
+#   Output: 
+#		
+#   Return:  
+#		YES--可写
+#       NO--不可写
+#       ERROR--错误
+##############################################################
+function file_is_writeable
+{   
+    typeset file_name=$1 
+    typeset usr_name=$2
+    typeset owner_name=""
+    typeset user_group=""
+    typeset attr=""
+
+    #检查参数是否为空，及文件是否存在
+    assert_not_empty  "$file_name"
+	assert_not_empty  "$usr_name"
+	assert_file_exist "$file_name"
+	
+	#返回文件属性
+	typeset tmp=`ls -dl "$file_name" 2>${IDEPLOY_NULL} | ${AWK} '{print $1}' 2>${IDEPLOY_NULL}`
+	tmp=`echo $tmp | tr -d 's'`
+	
+	#判断用户是否为root
+	if [ "X$usr_name" = "Xroot" ]
+	then
+	    return "${YES}"
+	fi
+	
+	#获取文件属主
+	func_exec_func file_get_owner "$file_name"
+	if [ "$?" -ne 0 ]
+	then
+	    return "$ERROR"
+	fi
+    owner_name="${RETURN[0]}"
+    group_name="${RETURN[1]}"
+
+	#返回用户所属组 
+	user_get_user_group "$usr_name"
+	if [ $? -ne 0 ]
+	then
+	    return $ERROR
+	fi
+	user_group="${RETURN[0]}"
+
+	
+	#判断用户属性
+	if [ "X$usr_name" = "X$owner_name" ]
+	then
+	    #属主
+	    attr=0  
+	elif [ "X$user_group" = "X$group_name" ]
+	then
+	    #组
+	    attr=1
+  	else
+  	    #其它
+  	    attr=2
+  	fi
+
+	case $attr in
+	0)
+	  #当用户为属主时，判断文件相对其是否可写
+	  func_exec_func str_mid "$tmp"  "3"  "1"
+	  ret=$?
+	  if [ "$ret" -ne 0 ]
+	  then
+	      return "$ERROR"
+	  fi
+	  mark="${RETURN[0]}"	
+	  if [ "X$mark" = "Xw" ]
+	  then
+	      return "${YES}"
+	  else
+	      return "${NO}"
+	  fi
+	  ;;
+	1)
+	  #当用户为组时，判断文件相对其是否可写
+	  func_exec_func str_mid "$tmp"  "6"  "1"
+	  ret=$?
+	  if [ "$ret" -ne 0 ]
+	  then
+	      return "$ERROR"
+	  fi
+	  mark="${RETURN[0]}"	
+	  if [ "X$mark" = "Xw" ]
+	  then
+	      return "${YES}"
+	  else
+	      return "${NO}"
+	  fi
+	  ;;
+	2)
+	  #当用户为其他时，判断文件相对其是否可写
+	  func_exec_func str_mid "$tmp" "9"  "1"
+	  ret=$?
+	  if [ "$ret" -ne 0 ]
+	  then
+	      return "$ERROR"
+	  fi
+	  mark="${RETURN[0]}"	
+	  if [ "X$mark" = "Xw" ]
+	  then
+	      return "${YES}"
+	  else
+	      return "${NO}"
+	  fi
+	  ;;
+	*)
+	   return "${ERROR}"
+	esac  
+	return "${ERROR}"	
+}
+##############################################################
+#   Name: file_is_readable          
+#   Description: 判断文件相对于某个用户是否可读    
+#   Input:          
+#		1.	file name
+#		2.  user name
+#   Output: 
+#		
+#   Return:  
+#		YES--可读
+#       NO--不可读
+#       ERROR--错误
+##############################################################
+function file_is_readable
+{   
+    typeset file_name=$1 
+    typeset usr_name=$2
+    typeset owner_name=""
+    typeset user_group=""
+    typeset attr=""
+     
+    #检查参数是否为空，及文件是否存在
+    assert_not_empty  "$file_name"
+	assert_not_empty  "$usr_name"
+	assert_file_exist "$file_name"
+	
+	#返回文件属性
+	typeset tmp=`ls -dl "$file_name" 2>${IDEPLOY_NULL} | ${AWK} '{print $1}' 2>${IDEPLOY_NULL}`
+	tmp=`echo $tmp | tr -d 's'`
+	
+	#判断用户是否为root
+	if [ "X$usr_name" = "Xroot" ]
+	then
+	    return "${YES}"
+	fi
+	
+	#获取文件属主
+	func_exec_func file_get_owner "$file_name"
+	if [ $? -ne 0 ]
+	then
+	    return "$ERROR"
+	fi
+    owner_name="${RETURN[0]}"
+    group_name="${RETURN[1]}"
+  	
+	#返回用户所属组
+	user_get_user_group "$usr_name"
+	if [ $? -ne 0 ]
+	then
+	    return $ERROR
+	fi
+	user_group="${RETURN[0]}"
+	
+	#判断用户属性
+	if [ "X$usr_name" = "X$owner_name" ]
+	then
+	    #属主
+	    attr=0
+	elif [ "X$user_group" = "X$group_name" ]
+	then
+	    #组
+	    attr=1
+  	else
+  	    #其它
+  	    attr=2
+  	fi
+
+	case $attr in
+	0)
+	  #当用户为属主时，判断文件相对其是否可写
+	  func_exec_func str_mid "$tmp"  "2"  "1"
+	  ret=$?
+	  if [ "$ret" -ne 0 ]
+	  then
+	      return "$ERROR"
+	  fi
+	  mark="${RETURN[0]}"	
+	  if [ "X$mark" = "Xr" ]
+	  then
+	      return "${YES}"
+	  else
+	      return "${NO}"
+	  fi
+	  ;;
+	1)
+	  #当用户为组时，判断文件相对其是否可写
+	  func_exec_func str_mid "$tmp"  "5"  "1"
+	  ret=$?
+	  if [ "$ret" -ne 0 ]
+	  then
+	      return "$ERROR"
+	  fi
+	  mark="${RETURN[0]}"	
+	  if [ "X$mark" = "Xr" ]
+	  then
+	      return "${YES}"
+	  else
+	      return "${NO}"
+	  fi
+	  ;;
+	2)
+	  #当用户为其他时，判断文件相对其是否可写
+	  func_exec_func str_mid "$tmp"  "8"  "1"
+	  ret=$?
+	  if [ "$ret" -ne 0 ]
+	  then
+	      return "$ERROR"
+	  fi
+	  mark="${RETURN[0]}"	
+	  if [ "X$mark" = "Xr" ]
+	  then
+	      return "${YES}"
+	  else
+	      return "${NO}"
+	  fi
+	  ;;
+	*)
+	   RETURN $ERROR
+	esac  
+	return "${ERROR}"
+}
+##############################################################
+#   Name: file_create          
+#   Description: 创建一个文件   
+#   Input:          
+#		1.	file name
+#		2.  overwrite(如果文件已经存在，是否覆盖(0:不覆盖, 1:覆盖))
+#   Output: 
+#		
+#   Return:  
+#       SUCC--成功
+#       ERR_FILE_ALREADY_EXIST=文件已经存在,且不覆盖
+#		ERROR----创建文件错误
+#
+##############################################################
+function file_create
+{
+    typeset file_name=$1
+	typeset overwrite=$2
+	
+	#检查参数是否为空，及文件是否存在
+	assert_not_empty  "$file_name"
+	assert_not_empty  "$overwrite"
+
+    #判断文件是否存在
+	func_exec_func file_is_exist "$file_name"
+	typeset ret=$?
+	#文件存在且覆盖
+	if [ "$ret" -eq 0 -a "X$overwrite" = "X1" ]
+	then
+	    func_exec_func file_delete "$file_name"
+	    ret=$?
+	    if [ "$ret" -ne 0 ]
+	    then
+	        return "$ret"
+	    fi
+	    touch "$file_name"
+	  
+	#文件存在且不覆盖
+	elif [ "$ret" -eq 0 -a "X$overwrite" = "X0" ]
+	then
+	    return "${ERR_FILE_ALREADY_EXIST}"
+	#文件不存在
+	else
+		
+		if [ `echo $file_name | ${GREP} -c "/"` -gt 0 ];then
+			father_dir=`dirname $file_name`
+			file_dir_is_exist $father_dir
+			ret_dir=$?
+			if [ $ret_dir -ne 0 ];then
+				file_create_dir "$father_dir" "1"
+				if [ $? -ne 0 ];then
+					return $?
+				fi			
+			fi
+			touch "$file_name"
+			if [ $? -ne 0 ];then
+				return $ERROR
+			fi	
+			
+		fi
+	    return "${SUCC}"	 
+	fi
+}
+##############################################################
+#   Name: file_create_dir          
+#   Description: 创建一个目录  
+#   Input:          
+#		1.	file name
+#		2.  overwrite(如果文件已经存在，是否覆盖(0:不覆盖, 1:覆盖))
+#   Output: 
+#		
+#   Return:  
+#       SUCC--创建成功 
+#		ERR_FILE_ALREADY_EXIST--目录已经存在,且不覆盖
+#
+##############################################################                  
+function file_create_dir
+{
+	
+    typeset dir_name=$1
+	typeset overwrite=$2
+	
+	#检查参数是否为空
+	assert_not_empty  "$dir_name"
+	assert_not_empty  "$overwrite"
+	
+	#判断目录是否存在
+	func_exec_func file_dir_is_exist "$dir_name"
+	typeset ret=$?
+	#目录存在且覆盖
+	if [ "$ret" -eq 0 -a "X$overwrite" = "X1" ]
+	then
+	    func_exec_func file_rm_dir "$dir_name" 2>${IDEPLOY_NULL}
+	    ret=$?
+	    if [ "$ret" -ne 0 ]
+	    then
+	        return "$ret"
+	    fi
+	    mkdir -p "$dir_name"     #2>${IDEPLOY_NULL}
+	    if [ $? -ne 0 ]
+	    then
+            return "${ERR_FILE_MKDIR_FAIL}"	    
+	    fi
+	    return "${SUCC}"	   
+	#目录存在且不覆盖
+	elif [ "$ret" -eq 0 -a "X$overwrite" = "X0" ]
+	then
+	    return "${ERR_FILE_ALREADY_EXIST}" 
+	#目录不存在
+	else
+	    mkdir -p "$dir_name" #2>${IDEPLOY_NULL}
+	    if [ $? -ne 0 ]
+	    then
+	        return "${ERR_FILE_MKDIR_FAIL}"
+	    fi
+	    return "${SUCC}"
+	fi  		
+}
+##############################################################
+#   Name: file_copy          
+#   Description: 拷贝文件时,保持源文件属性不变    
+#   Input:          
+#		1.	source file
+#		2.  destination file
+#       3.  0 或 1(当目标文件存在时，是否覆盖，1表示覆盖，0表示不覆盖) 
+#   Output: 
+#		
+#   Return:  
+#       SUCC--正常 
+#		ERR_FILE_ALREADY_EXIST--文件存在且不覆盖
+#       ERR_FILE_CP_FAIL--文件拷贝失败
+#		PARA_ERROR 参数个数错误
+#		ERR_FILE_NOT_EXIST  --文件不存在
+##############################################################
+function file_copy
+{
+    if [ $# -ne 3 ];then
+    	return $PARA_ERROR
+    fi   
+    
+    typeset src=$1
+	typeset des=$2
+	typeset overwrite=$3
+	
+	if [  ! -f $src ];then
+		return $ERR_FILE_NOT_EXIST
+	fi
+	
+	if [ $overwrite != "0" -a $overwrite != "1" ];then
+		return $PARA_ERROR
+	fi
+			
+	assert_not_empty  "$src"
+	assert_not_empty  "$des"
+	assert_not_empty  "$overwrite"
+	assert_file_exist "$src"
+	
+	func_exec_func file_is_exist "$des"
+	#modify by 方学维 38744 ret忘了赋值
+	ret=$?
+	if [ $ret -eq 0 -a "X$overwrite" = "X1" ]
+	then
+	    cp -p "$src" "$des" 2>${IDEPLOY_NULL}
+	    if [ $? -ne 0 ]
+	    then
+	        return "${ERR_FILE_CP_FAIL}"
+	    fi
+	    return "${SUCC}"
+	elif [ "$ret" -eq 0 -a "X$overwrite" = "X0" ]
+	then
+	    return "${ERR_FILE_ALREADY_EXIST}"	 
+	else
+	    cp -p "$src" "$des" 2>${IDEPLOY_NULL}
+	    if [ $? -ne 0 ]
+	    then
+	        return "${ERR_FILE_CP_FAIL}"
+	    fi
+	fi
+	
+    return "${SUCC}"
+}
+##############################################################
+#   Name: file_copy_dir          
+#   Description: 拷贝目录时,保持源目录属性不变    
+#   Input:          
+#		1.	source dir
+#		2.  destination dir
+#       3.  0 或 1(当目标文件存在时，是否覆盖，1表示覆盖，0表示不覆盖) 
+#   Output: 
+#		
+#   Return:  
+#       SUCC--正常 
+#		ERR_FILE_ALREADY_EXIST--文件存在且不覆盖
+#       ERR_CP_DIR_FAIL--文件拷贝失败
+#		PARA_ERROR 参数个数错误
+#		ERR_DIR_NOT_EXIST  --文件不存在
+##############################################################
+function file_copy_dir
+{
+
+	if [ $# -ne 3 ];then
+    	return $PARA_ERROR
+    fi   
+    
+    typeset src=$1
+	typeset des=$2
+	typeset overwrite=$3
+	
+	if [ ! -d $src  ];then
+		return $ERR_DIR_NOT_EXIST
+	fi
+	
+	if [ $overwrite != "0" -a $overwrite != "1" ];then
+		return $PARA_ERROR
+	fi
+	
+	
+	func_exec_func file_dir_is_exist "$des"
+	#modify by 方学维 38744 ret忘了赋值
+	reta=$?
+	if [ $reta -eq 0 -a "X$overwrite" = "X1" ]
+	then
+	    func_exec_func file_rm_dir "$des"
+	    ret=$?
+	    if [ "$ret" -ne 0 ]
+	    then
+	        return "$ret"
+	    fi
+	    cp -pr "$src" "$des"
+	    if [ $? -ne 0 ]
+	    then
+	        return "${ERR_CP_DIR_FAIL}"
+	    fi
+	    return "${SUCC}"
+	#modify by 方学维 38744 ret忘了赋值 使用了不对的ret变量
+	elif [ "$reta" -eq 0 -a "X$overwrite" = "X0" ]
+	then
+	    return "${ERR_DIR_ALREADY_EXIST}"
+	else
+	    cp -pr "$src" "$des"
+	    if [ $? -ne 0 ]
+	    then
+	        return "${ERR_CP_DIR_FAIL}"
+	    fi
+	    return "${SUCC}"	
+	fi  
+	
+}
+##############################################################
+#   Name: file_dir_is_exist          
+#   Description: 判断指定目录是否存在   
+#   Input:          
+#		1.	file name
+#
+#   Output: 
+#		
+#   Return: 
+#		YES-----目录存在
+#		NO------目录不存在
+#
+##############################################################
+function file_dir_is_exist
+{
+
+    typeset dir_name="$1"
+	
+	#检查参数是否为空
+	assert_not_empty  "$dir_name"
+	
+	#判断目录是否存在
+	if [ -d "$dir_name" ]
+	then
+		return "${YES}"
+	else
+		return "${NO}"
+	fi
+}
+##############################################################
+#   Name: file_grep          
+#   Description: 返回包含特征字符串的所有行    
+#   Input:          
+#		1.	file name
+#		2.  express string(待查找字符串的包含的特征字符串)
+#   Output: 
+#		RETURN[](包含特征字符串的行)
+#   Return:  
+#       SUCC--正常 
+#		PARA_ERROR--- 参数个数错误
+#		ERR_FILE_NOT_EXIST--文件不存在
+#
+##############################################################
+function file_grep
+{
+	if [ $# -ne 2 ]
+	then
+		return $PARA_ERROR
+	fi
+	
+	typeset file_name=$1
+	typeset expr_str=$2
+    typeset count=0
+    
+    if [ ! -f $file_name ]
+    then
+    	return $ERR_FILE_NOT_EXIST
+    fi
+  
+    #返回包含特征字符串的所有行
+    file_new_tmp
+    typeset tmp_file="${RETURN[0]}"
+	cat "${file_name}" | ${GREP} "$expr_str" > $tmp_file
+	while read line
+    do
+        RETURN[$count]="`echo $line`"
+        ((count=count+1))
+    done < $tmp_file
+	# 问题单a01d85894  解决安装过程临时文件过多
+	rm -rf $tmp_file
+        # 问题单a01d85894  解决安装过程临时文件过多
+	RETNUM=$count
+	return "$SUCC"
+}
+##############################################################
+#   Name:  file_get_content         
+#   Description: 返回文件内容  
+#   Input:          
+#		1.	file name
+#		 
+#   Output: 
+#		输出文件内容
+#   Return:  
+#       SUCC--正常 
+#		ERR_FILE_CAT_FAIL--cat文件失败
+#		PARA_ERROR---------参数错误
+#		ERR_FILE_NOT_EXIST------文件不存在
+##############################################################
+function file_get_content
+{
+	if [ $# -ne 1 ];then
+		return $PARA_ERROR
+	fi
+    typeset file_name=$1
+	if [ ! -f $file_name ]
+	then
+		return $ERR_FILE_NOT_EXIST
+	fi
+		
+	#输出文件内容到屏幕		
+	cat "$file_name" 2>${IDEPLOY_NULL} 
+	if [ $? -ne 0 ]
+	then
+	    return "${ERR_FILE_CAT_FAIL}"
+	fi	
+	return "${SUCC}"	 
+}         
+##############################################################
+#   Name: file_get_content_filter_note          
+#   Description:    
+#   Input:          
+#		1.	file name
+#		2.  express string(表示注释的字符串)
+#   Output: 
+#		
+#   Return:  
+#       SUCC--正常 
+#		ERR_FILE_CAT_FAIL--cat文件失败并获取清空注释后的内容
+#
+##############################################################
+function file_get_content_filter_note
+{   
+    typeset file_name=$1
+	typeset expr_str=$2
+	typeset tmp_file="/tmp/file_get_content_filter_note"
+	
+	#检查参数是否为空，文件是否存在
+	assert_not_empty  "$file_name"
+	assert_not_empty  "$expr_str"
+	assert_file_exist "$file_name"
+	
+	#输出文件清除注释后的内容到屏幕		
+	cat "$file_name" 2>${IDEPLOY_NULL} | ${AWK} -F"${expr_str}" '{print $1}' 2>${IDEPLOY_NULL}
+	if [ $? -ne 0 ]
+	then
+	    return "${ERR_FILE_CAT_FAIL}"
+    fi
+	return "${SUCC}"
+}
+##############################################################
+#   Name: file_append_line          
+#   Description:    
+#   Input:          
+#		1.	file name
+#		2.  express string(待加到文件末尾的字符串) 
+#   Output: 
+#		
+#   Return:  
+#       SUCC--添加成功
+#		ERR_APPEND_LINE_FAIL--添加一行到文件末尾失败
+#		PARA_ERROR 参数个数错误
+#		ERR_FILE_NOT_EXIST  --文件不存在
+##############################################################
+function file_append_line
+{
+	if [ $# -ne 2 ];then
+		return $PARA_ERROR
+	fi
+			
+    typeset file_name=$1
+	typeset expr_str=$2
+	
+	if [  ! -f "$file_name" ];then
+		return $ERR_FILE_NOT_EXIST
+	fi
+	
+	#在文件末尾追加一行	
+	echo "$expr_str" >> "$file_name" 2>${IDEPLOY_NULL}
+	if [ $? -ne 0 ]
+	then
+	    return "${ERR_APPEND_LINE_FAIL}"
+	fi
+	return "${SUCC}"
+}
+##############################################################
+#   Name:  file_get_size         
+#   Description:    
+#   Input:          
+#		1.	file name
+#		 
+#   Output: 
+#		RETURN[0](文件的大小(bytes))
+#   Return:  
+#       SUCC--正常 
+#		ERR_FILE_GET_SIZE_FAIL--获取文件大小错误
+#		PARA_ERROR  ---参数错误
+#		ERR_FILE_NOT_EXIST--文件不存在 
+##############################################################
+function file_get_size
+{
+	if [ $# -ne 1 ];then
+		return $PARA_ERROR
+	fi
+    typeset file=$1
+	if [ ! -f $file -a ! -d $file ];then
+		return $ERR_FILE_NOT_EXIST
+	fi
+		
+	#获取文件大小
+	file_size=`ls -al "$file" 2>${IDEPLOY_NULL} | ${AWK} '{print $5}' 2>${IDEPLOY_NULL}` 
+	if [ "X$file_size" = "X" ]
+	then
+	    return "${ERR_FILE_GET_SIZE_FAIL}"
+	fi
+	file_size=`echo $file_size`
+	
+	ret_set_one ${file_size}
+	return "${SUCC}"
+} 
+##############################################################
+#   Name:  file_copy_rm_src         
+#   Description: 拷贝源文件到目标文件，并撤除源文件  
+#   Input:          
+#		1.	source file name
+#		2.  destination file name 
+#   Output: 
+#		
+#   Return:  
+#       SUCC--成功
+#		ERR_FILE_CP_RM_SRC--拷贝文件删除源文件时失败
+#
+##############################################################
+function file_copy_rm_src
+{
+    typeset src=$1
+	typeset des=$2
+	
+	#检查参数是否为空，文件是否存在
+	assert_not_empty  "$src"
+	assert_not_empty  "$des"
+	assert_not_empty  "$overwrite"
+	assert_file_exist "$src"
+	
+	#拷贝文件到目标，并撤除源文件
+	cp "$src" "$des" 2>${IDEPLOY_NULL} && rm "$src" 2>${IDEPLOY_NULL}
+	if [ $? -ne 0 ]
+	then
+	    return "${ERR_FILE_CP_RM_SRC}"
+	fi
+	return "${SUCC}"
+}    
+
+##############################################################
+#   Name:  file_new_tmp         
+#   Description: 生成临时文件 
+#   Input:          
+#		1.  dir 临时文件存放的路径, 如果省略则为 /tmp
+#
+#   Output: 
+#		RETURN[0]:生成的临时文件的全路径
+#   Return:  
+#       SUCC--成功
+#		
+#
+##############################################################
+function file_new_tmp
+{
+    typeset dir_name="$1"
+    typeset date_time=""
+   
+	if [ "X$dir_name" = "X" ]
+	then
+		dir_name="${HOME}"
+	fi
+	
+	assert_dir_exist "$dir_name" "Dir name is null!"
+	
+    date_time=`date '+%Y%m%d%H%M%S'`
+    g_tmp_file="${dir_name}/breeze_${date_time}_$$_${g_tmp_count}_tmp"
+    ((g_tmp_count+=1))
+
+    func_exec_func file_create "$g_tmp_file" "1"
+    if [ "$?" -ne 0 ]
+    then
+        return $ERR_FILE_CREAT
+    fi
+    
+    ret_set_one "${g_tmp_file}"
+    return "${SUCC}"
+}
+
+##############################################################
+#   Name:  file_delete         
+#   Description: 撤除文件
+#   Input:          
+#		1.  file(要撤除的文件)
+#
+#   Output: 
+#		
+#   Return:  
+#       SUCC--成功
+#		ERR_FILE_DELETE_FAIL--撤除文件失败
+#		PARA_ERROR  ------参数错误
+#		ERR_FILE_NOT_EXIST-----文件不存在
+##############################################################
+function file_delete
+{
+	if [ $# -ne 1 ];then
+		return $PARA_ERROR
+	fi
+    typeset file=$1	
+	if [ ! -f $file ];then
+		return $ERR_FILE_NOT_EXIST
+	fi
+	#检查参数是否为空，文件是否存在	
+	assert_not_empty  "$file"
+	file_is_exist  "$file"
+	if [ $? -ne 0 ];then
+		return ${ERR_FILE_NOT_EXIST}
+	fi
+	
+	#拷贝文件到目标，并撤除源文件
+	rm -rf "$file" 2>${IDEPLOY_NULL}
+	if [ $? -ne 0 ]
+	then
+	    return "${ERR_FILE_DELETE_FAIL}"
+	fi
+	return "${SUCC}"	    
+}
+
+##############################################################
+#   Name:  file_rm_dir         
+#   Description: 撤除文件夹
+#   Input:          
+#		1.  dir_name(要撤除的文件夹)
+#
+#   Output: 
+#		
+#   Return:  
+#       SUCC--成功
+#		ERR_DIR_DELETE_FAIL--撤除文件失败
+#		PARA_ERROR-----参数错误
+##############################################################
+function file_rm_dir
+{
+	if [ $# -ne 1 ];then
+		return $PARA_ERROR
+	fi
+    typeset dir=$1	
+	
+	func_exec_func os_is_system_dir "$dir"
+	ret=$?
+	if [ "$ret" -eq 0 ]
+	then
+	    return "$ret"
+	fi
+	
+	#撤除源文件
+	rm -rf "$dir" 2>${IDEPLOY_NULL} 
+	if [ $? -ne 0 ]
+	then
+	    return "${ERR_DIR_DELETE_FAIL}"
+	fi
+	return "${SUCC}"		    
+}
+
+##############################################################
+#   Name:  file_select_line_from_line         
+#   Description: 从某一行开始返回第一个包含指定字符串的行的行号
+#   Input:          
+#		1.  file name
+#       2.  start lineno
+#       3.  express string
+#   Output: 
+#		
+#   Return:  
+#       SUCC--成功
+#		ERR_FILE_DELETE_FAIL--撤除文件失败
+#
+##############################################################
+function file_select_line_from_line
+{
+    typeset file_name=$1	
+    typeset start_line=$2
+    typeset expr_str=$3
+	
+	#检查参数是否为空，文件是否存在	
+	assert_not_empty  "$file_name"
+	assert_not_empty  "$start_line"
+	assert_not_empty  "$expr_str"	
+	assert_file_exist  "$file_name" "There is no ${file_name}"
+	
+	#获取文件行数
+	func_exec_func file_get_lines_count "$file_name"
+	if [ $? -ne 0 ]; then
+		return "${ERR_FILE_GET_LINES_ERROR}"
+	fi
+	max_line=`echo ${RETURN[0]}`
+	
+	if [ "$start_line" -gt "$max_line" ]; then		
+		return "${ERR_FILE_LINENO_TOO_GREAT}"
+	fi
+		
+	func_exec_func file_new_tmp 
+	ret=$?
+	if [ "$ret" -ne 0 ]
+	then
+	    return "$ret"
+	fi
+	typeset tmp_file="${RETURN[0]}"	
+
+	${SED} -n "${start_line},${max_line}p" "$file_name" >> "$tmp_file"
+	if [ $? -ne 0 ]
+	then
+	#  问题单a01d85894  解决安装过程临时文件过多  修改开始
+	rm -rf $tmp_file
+        return "${ERR_FILE_SED_PRINT}"		
+	fi
+	
+	func_exec_func file_select_line "$tmp_file" "${expr_str}"
+	ret=$?
+	rm -rf $tmp_file
+	#  问题单a01d85894  解决安装过程临时文件过多  修改开始
+	if [ "$ret" -ne 0 ]
+	then
+	    return "$ret"
+	fi
+	line_no="${RETURN[0]}"
+	#begin modify by 方学维 38744 注意一定要 - 1 因为本身算第1行
+	line_no=`expr "$line_no" - 1 + "$start_line" 2>${IDEPLOY_NULL}`
+	#end   modify by 方学维 38744 注意一定要 - 1 因为本身算第1行
+	if [ "X$line_no" = "X" ]
+	then
+	    return "${ERR_EXPR_ERROR}"
+	fi
+	
+	ret_set_one "${line_no}"
+	return "${SUCC}"	 
+}
+
+##############################################################
+#   Name:  file_get_comment_from_lineno       
+#   Description: 从某一行开始返回第一个包含指定字符串的行的行号
+#   Input:          
+#		1.  file name
+#       2.  start lineno
+#       3.  end_lineno
+#   Output: 
+#		
+#   Return:  
+#       SUCC--成功
+#		ERR_FILE_LINENO_TOO_GREAT--文件行号过大
+#       ERR_FILE_SED_PRINT--SED打印失败
+#       ERR_FILE_GET_LINES_ERROR--获取文件行号失败
+#
+##############################################################
+function file_get_comment_from_lineno
+{
+    typeset file_name=$1	
+    typeset start_line=$2
+    typeset end_lineno=$3
+	
+	#检查参数是否为空，文件是否存在	
+	assert_not_empty  "$file"
+	assert_not_empty  "$start_line"
+	assert_not_empty  "$end_lineno"	
+	assert_dir_exist  "$file_name"
+	
+	#获取文件行数
+	func_exec_func file_get_lines_count "$file_name"
+	if [ $? -ne 0 ]; then
+		return "${ERR_FILE_GET_LINES_ERROR}"
+	fi
+	max_line=`echo ${RETURN[0]}`
+	
+	if [ "$start_line" -gt "$max_line" -o "$end_line" -gt "$max_line" ]; then		
+		return "${ERR_FILE_LINENO_TOO_GREAT}"
+	fi
+			
+	${SED} -n "${start_line},${end_line}p" "$file_name" 
+	if [ $? -ne 0 ]
+	then
+        return "${ERR_FILE_SED_PRINT}"		
+	fi
+	 
+	return "${SUCC}"	 
+}
+
+
+
+###########################file.inc END################################
+
+###########################assert.inc  BEGIN##################################
+
+
+#实现assert功能，供shell文件包含
+# 当断言失败时,会输出断言信息,并退出所在的shell进程,退出码为$ASSERT_ERROR, 此错误码定义在err.inc中,
+# 断言函数在非调试状态下总是返回0,不进行判断
+
+#interface:
+#	assert_not_empty		assert输入参数1非空
+#	assert_dir_exist		assert输入参数1代表的目录存在
+#	assert_file_exist   	assert输入参数1代表的文件存在
+#	assert_not_negative		assert输入参数1代表的字符串是非负整数
+#	assert_user_exist		assert输入参数1代表的用户存在
+#   assert_group_exist		assert输入参数1代表的组存在
+
+
+##############################################################################
+#   Name:           assert_not_empty
+#   Description:    assert输入的参数1所代表字符串不是空字符串
+#	input:
+#  		1. 要断言的字符串
+#	    2. 断言错误时,附在断言后面的附加输出信息
+#   Output: 无
+#  		assert失败，退出程序,退出码$ASSERT_ERROR
+#  		assert成功，返回0
+#   Return:  
+#  		assert成功，返回0
+##################################################################################
+function assert_not_empty
+{
+	typeset str="$1"
+	#去除变量前后的空格
+	str=`echo ${str}`
+	shift
+	typeset desc="$@"	
+	
+	#在非调试状态下不进行assert
+	if [ "$BRZ_DEBUG" = "0" ]; then
+		return 0
+	fi
+		
+	if [ "X${str}" = "X" ]; then
+		echo "ASSERT NOT EMPTY FAILURE:$desc"
+		exit ${ASSERT_ERROR}
+	fi
+			
+	return 0
+}
+
+##############################################################################
+#   Name:           assert_dir_exist
+#   Description:    assert输入的参数1代表的目录存在
+#	input:
+#  		1. 要断言的字符串
+#	    2. 断言错误时,附在断言后面的附加输出信息
+#   Output: 无
+#  		assert失败，退出程序,退出码$ASSERT_ERROR
+#  		assert成功，返回0
+#   Return:  
+#  		assert成功，返回0
+##################################################################################
+function assert_dir_exist
+{
+	typeset dir="$1"
+	shift
+	typeset desc="$@"	
+		
+	#在非调试状态下不进行assert
+	if [ "$BRZ_DEBUG" = "0" ]; then
+		return 0
+	fi
+	
+	assert_not_empty	"$dir"    "$desc"
+	
+	if [ ! -d "$dir" ]; then
+		echo "ASSERT DIRECTORY NOT EXIST FAILURE:$desc"
+		exit "$ASSERT_ERROR"
+	fi
+	
+	return 0
+}
+
+##############################################################################
+#   Name:           assert_file_exist
+#   Description:    assert输入的参数1代表的文件存在
+#	input:
+#  		1. 要断言的字符串
+#	    2. 断言错误时,附在断言后面的附加输出信息
+#   Output: 无
+#  		assert失败，退出程序,退出码$ASSERT_ERROR
+#  		assert成功，返回0
+#   Return:  
+#  		assert成功，返回0
+##################################################################################
+function assert_file_exist
+{
+	typeset file="$1"
+	shift
+	typeset desc="$@"	
+
+	#在非调试状态下不进行assert
+	if [ "$BRZ_DEBUG" = "0" ]; then
+		return 0
+	fi
+		
+	assert_not_empty	"$file"   "$desc"
+	
+	if [ ! -f "$file" ]; then
+		echo "ASSERT FILE NOT EXIST FAILURE:$desc"
+		exit "$ASSERT_ERROR"
+	fi
+	
+	return 0
+}
+
+##############################################################################
+#   Name:           assert_not_negative
+#   Description:    assert输入的参数1代表的字符串是非负整数
+#	input:
+#  		1. 要断言的字符串
+#	    2. 断言错误时,附在断言后面的附加输出信息
+#   Output: 无
+#  		assert失败，退出程序,退出码$ASSERT_ERROR
+#  		assert成功，返回0
+#   Return:  
+#  		assert成功，返回0
+##################################################################################
+function assert_not_negative
+{
+	typeset para="$1"
+	shift
+	typeset desc="$@"
+	typeset var=""
+	
+	#在非调试状态下不进行assert
+	if [ "$BRZ_DEBUG" = "0" ]; then
+		return 0
+	fi	
+	assert_not_empty	"$para"  "$desc"
+	
+	# 由于expr $para - 0在para为0时返回1，所以对这种情况特殊处理
+	if [ "$para" = "0" ]; then
+		return 0
+	fi
+	
+	expr $para - 0  >${IDEPLOY_NULL} 2>&1
+	if [ $? -ne 0 ]; then
+		echo "ASSERT NOT NEGATIVE:$desc"
+		exit "$ASSERT_ERROR"	
+	fi
+	
+	if [ "$para" -lt 0 ]; then
+		echo "ASSERT NOT NEGATIVE:$desc"
+		exit "$ASSERT_ERROR"			
+	fi
+	
+	return 0
+}
+
+##############################################################################
+#   Name:           assert_user_exist
+#   Description:    assert输入参数1代表的用户存在
+#	input:
+#  		1. 要断言的字符串
+#	    2. 断言错误时,附在断言后面的附加输出信息
+#   Output: 无
+#  		assert失败，退出程序,退出码$ASSERT_ERROR
+#  		assert成功，返回0
+#   Return:  
+#  		assert成功，返回0
+##################################################################################
+function assert_user_exist
+{
+	typeset para="$1"
+	shift
+	typeset desc="$@"
+	
+	#在非调试状态下不进行assert
+	if [ "$BRZ_DEBUG" = "0" ]; then
+		return 0
+	fi	
+	
+	assert_not_empty	"$para"  "$desc"
+	
+	id "$para" 2>${IDEPLOY_NULL}
+	if [ $? -ne 0 ]; then
+		echo "ASSERT USER EXIST:$desc"
+		exit "$ASSERT_ERROR"	
+	fi
+	
+	return 0	
+}
+
+
+##############################################################################
+#   Name:           assert_group_exist
+#   Description:    assert输入参数1代表的组存在
+#	input:
+#  		1. 要断言的字符串
+#	    2. 断言错误时,附在断言后面的附加输出信息
+#   Output: 无
+#  		assert失败，退出程序,退出码$ASSERT_ERROR
+#  		assert成功，返回0
+#   Return:  
+#  		assert成功，返回0
+##################################################################################
+function assert_group_exist
+{
+	typeset para="$1"
+	shift
+	typeset desc="$@"
+	
+	#在非调试状态下不进行assert
+	if [ "$BRZ_DEBUG" = "0" ]; then
+		return 0
+	fi	
+	
+	assert_not_empty	"$para"  "$desc"
+	
+	id "$para" 2>${IDEPLOY_NULL}
+	if [ $? -ne 0 ]; then
+		echo "ASSERT USER EXIST:$desc"
+		exit "$ASSERT_ERROR"	
+	fi
+	
+	return 0	
+}
+#################################assert.inc  END##########################
+
+###############################cfg_file.inc  BEGIN########################
+##########################################################################
+#函数名: cfg_is_exist_sec
+#功能: 判断是否段键格式文件中存在一个段名
+#
+#输入:  1.文件名
+#	    2.要找的段名	   
+#输出: 无
+#
+#返回: 	0:存在
+#       ERR_CFG_PARA_ERROR:参数个数错误
+#		ERR_CFG_FILE_NOT_EXIST:文件不存在
+#       ERR_CFG_FILE_SEC_NOT_EXIST:段不存在
+#########################################################################
+function cfg_is_exist_sec
+{
+	typeset func_name=cfg_is_exist_sec
+	typeset file_name="$1"
+	typeset sec_name="$2"
+
+	if [ $# -ne 2 ];then
+		return $ERR_CFG_PARA_ERROR
+	fi
+	
+	#判断参数是否为空
+	assert_not_empty "$file_name"  "File name is null!"
+	#判断参数是否为空
+	assert_not_empty "$sec_name"  "Section name is null!"
+
+	file_is_exist "$file_name"
+	if [ $? -ne 0 ];then
+		return $ERR_CFG_FILE_NOT_EXIST
+	fi	
+			
+	func_exec_func file_select_line "$file_name" "^[ 	]*\[${sec_name}\]"	##注意要转义
+	if [ $? -ne 0 ];then
+		return $ERR_CFG_FILE_SEC_NOT_EXIST
+	fi
+
+	return 0
+	
+}
+
+##########################################################################
+#函数名: cfg_get_sec_names
+#功能: 返回段键配置文件的多个段的名字
+#
+#输入:  1.文件名
+#输出: RETNUM=段的个数 RETURN[0-?]多个段名
+#
+#返回: 0:成功 
+#      ERR_CFG_PARA_ERROR:参数个数错误
+#	   ERR_CFG_FILE_NOT_EXIST:文件不存在
+#	   ERROR:没有取到有效的记录
+#########################################################################
+function cfg_get_sec_names
+{
+	typeset func_name=cfg_is_exist_sec
+	typeset file_name="$1"
+	typeset ret_count=0
+	
+	if [ $# -ne 1 ];then
+		return $ERR_CFG_PARA_ERROR
+	fi	
+	
+	#判断参数是否为空
+	assert_not_empty "$file_name" "File name is null!"
+
+	#杨强修改开始
+	#原因：多余
+	#assert_not_empty "$sec_name"
+	#杨强修改结束
+	
+	##assert_file_exist "$file_name"	
+
+	
+	file_is_exist "$file_name"
+	if [ $? -ne 0 ];then
+		return $ERR_CFG_FILE_NOT_EXIST
+	fi	
+	
+	
+	file_new_tmp
+	if [ $? -ne 0 ];then
+		echo "create temp file is failed!"
+		return $ERROR
+	fi
+	typeset tmp_file="${RETURN[0]}"
+	${GREP} "^[ 	]*\[.*\]" "$file_name"|
+	${AWK} -F\[ '{print $2}'|${AWK} -F\] '{print $1}' > $tmp_file
+	while read line_buf 
+	do		
+		RETURN[$ret_count]=$line_buf
+		((ret_count+=1))	
+	done < $tmp_file
+	# 问题单a01d85894   解决临时文件过多
+	rm -rf $tmp_file
+        # 问题单a01d85894   解决临时文件过多
+	RETNUM=$ret_count
+	if [ $ret_count -eq 0 ];then
+		return $ERROR
+	fi		
+	return 0	
+	
+}
+
+##########################################################################
+#函数名: cfg_get_sec_value
+#功能: 返回段键格式某个段下的值(去掉注释#)
+#
+#输入:  1.文件名
+#	    2.段名
+#输出: RETNUM=行数 RETURN[0-?]每一行的数据
+#
+#返回: 0:成功 
+#      ERR_CFG_PARA_ERROR:参数个数错误
+#	   ERR_CFG_FILE_NOT_EXIST:文件不存在
+#      ERR_CFG_FILE_SEC_NOT_EXIST
+#	   ERROR:未知错误
+#########################################################################
+function cfg_get_sec_value
+{
+	typeset func_name=cfg_is_exist_sec
+	
+	typeset file_name="$1"
+	typeset sec_name="$2"
+	
+	typeset ret_count=0		
+
+	if [ $# -ne 2 ];then
+		return $ERR_CFG_PARA_ERROR
+	fi
+	
+	assert_not_empty "$file_name" "File name is null!"
+	assert_not_empty "$sec_name" "Section name is null!"
+		
+	cfg_is_exist_sec "$file_name" "$sec_name"
+	typeset rt=$?
+	if [ $rt -ne 0 ]
+	then
+		if [ $rt -eq $ERR_CFG_FILE_NOT_EXIST ]
+		then
+			return $ERR_CFG_FILE_NOT_EXIST
+		elif [ $rt -eq $ERR_CFG_FILE_SEC_NOT_EXIST ]
+		then
+			return $ERR_CFG_FILE_SEC_NOT_EXIST
+		else
+			return $ERROR
+		fi
+	fi	
+	
+	file_new_tmp
+	if [ $? -ne 0 ];then
+		echo "create temp file is failed!"
+		return $ERROR
+	fi
+	typeset tmp_file="${RETURN[0]}"
+	#杨强修改开始
+	#原因：去掉多读入的一行（下一sec的头）和空行
+	#${SED} -n "/^[ 	]*\[[ 	]*${sec_name}[ 	]*\]/,/^[ 	]*\[.*\]/p" "$file_name" |${AWK} -F# '{print $1}' |while read line_buf  
+	${AWK} -F# '{print $1}' "$file_name" |     #去掉注释
+	${SED} '/^[ 	]*$/d' |                    #删掉空行
+	${SED} -n "/^[     ]*\[[   ]*${sec_name}[  ]*\]/,/^[       ]*\[.*\]/p" | #查找段内容
+	${SED} '/^[        ]*\[.*\]/d' > $tmp_file     #去掉本段和下段的开头
+	while read line_buf  
+	#杨强修改结束
+	do		
+		RETURN[$ret_count]=$line_buf
+		((ret_count+=1))
+	done < $tmp_file
+	# 问题单a01d85894   解决临时文件过多
+	rm -rf $tmp_file
+        # 问题单a01d85894   解决临时文件过多
+	RETNUM=$ret_count
+	if [ $ret_count -eq 0 ];then
+		return $ERROR
+	fi	
+	return 0		
+}
+
+######################################################################
+#函数名: cfg_is_exist_sec_key
+#功能:	查找是否段键格式中存在一个段,并存在一个键
+#
+#方法:到该配置文件中找出该段出来
+#输入: 1文件名 2段名 3键
+#输出: 无
+#返回: 0 成功
+#	   ERR_CFG_PARA_ERROR:参数个数不对
+#	   ERR_CFG_FILE_NOT_EXIST:文件不存在
+#      ERR_CFG_FILE_SEC_NOT_EXIST:段不存在
+#      ERR_CFG_FILE_KEY_NOT_EXIST:键不存在
+#	   ERROR:未知错误
+###################################################################
+function cfg_is_exist_sec_key
+{
+
+	typeset func_name=cfg_is_exist_sec_key
+
+	typeset file_name="$1"
+	typeset sec_name="$2"
+	typeset key_name="$3"
+	
+	if [ $# -ne 3 ];then
+		return $ERR_CFG_PARA_ERROR
+	fi
+	
+	assert_not_empty "$file_name" "File name is null!"
+	assert_not_empty "$sec_name" "Section name is null!"
+	assert_not_empty "$key_name" "Key name is null!"
+	
+	#修改问题单A01E33223，将判断文件函数修改为file_is_exist，使得用户可以
+	#根据返回码判断错误，而不是直接exit
+	file_is_exist "$file_name"
+	if [ $? -ne 0 ];then
+		return ${ERR_CFG_FILE_NOT_EXIST}
+	fi
+	
+	#杨强修改开始 判断错误类型
+#	cfg_is_exist_sec "$file_name" "$sec_name"
+#	if [ $? -ne 0 ];then
+#		return $ERR_CFG_SEC_NOT_EXIST
+#	fi
+	typeset rt	
+	cfg_is_exist_sec "$file_name" "$sec_name"
+	rt=$?
+	if [ $rt -ne 0 ]
+	then
+		if [ $rt -eq $ERR_CFG_FILE_NOT_EXIST ]
+		then
+			return $ERR_CFG_FILE_NOT_EXIST
+		elif [ $rt -eq $ERR_CFG_FILE_SEC_NOT_EXIST ]
+		then
+			return $ERR_CFG_FILE_SEC_NOT_EXIST
+		else
+			return $ERROR
+		fi
+	fi
+	#杨强修改结束 判断错误类型
+
+	# Begin add by fangxw 38744 处理特殊情况，键中带有 [] 符号的情况，要加上转义符
+	key_name=`echo "${key_name}" | ${SED} 's/\[/\\\[/g' | ${SED} 's/\]/\\\]/g'`
+	# End   add by fangxw 38744 处理特殊情况，键中带有 [] 符号的情况，要加上转义符
+	
+	##sed命令找出之间的,再在这之间找出key_name
+	RETNUM="`${SED} -n \"/^[  	]*\[[ 	]*${sec_name}[ 	]*\]/,/^[ 	]*\[/p\" $file_name|${GREP} -c \"^[ 	]*${key_name}[ 	]*=\" 2>${IDEPLOY_NULL}`"
+	
+	if [ $? -ne 0 -o $RETNUM -eq 0 ]
+	then
+		return $ERR_CFG_FILE_KEY_NOT_EXIST
+	fi 
+
+	return 0
+	
+}
+######################################################################
+#函数名: cfg_add_sec_key
+#功能:	添加一个key
+#
+#方法:给一个文件里添加一个key
+#输出: 无
+#输入: 1文件名 2段名 3键 4值
+#返回: 0 成功
+#	   ERR_CFG_PARA_ERROR:参数个数不对
+#	   ERR_CFG_FILE_NOT_EXIST:文件不存在
+#	   ERR_CFG_FILE_SEC_NOT_EXIST:段不存在
+#	   ERR_CFG_SEC_KEY_ALREADY_EXIST:键已经存在了
+#	   ERROR:添加不成功
+###################################################################
+function cfg_add_sec_key
+{
+    set -o noglob
+	typeset func_name=cfg_add_sec_key
+	
+	typeset file_name="$1"
+	typeset sec_name="$2"
+	typeset key_name="$3"
+	typeset key_value="$4"
+	
+	typeset line_no
+	
+	if [ $# -ne 4 ];then
+		return $ERR_CFG_PARA_ERROR
+	fi
+	
+	assert_not_empty "$file_name" "File name is null!"
+	assert_not_empty "$sec_name" "Section name is null!"
+	assert_not_empty "$key_name" "Key name is null!"	
+	
+	file_is_exist "$file_name"
+	if [ $? -ne 0 ];then
+		return $ERR_CFG_FILE_NOT_EXIST
+	fi	
+	
+	##段是否存在
+	cfg_is_exist_sec "$file_name" "$sec_name"
+	if [ $? -ne 0 ];then
+		return $ERR_CFG_FILE_SEC_NOT_EXIST
+	fi
+	
+	cfg_is_exist_sec_key "$file_name" "$sec_name" "$key_name"
+	if [ $? -eq 0 ];then
+		return $ERR_CFG_SEC_KEY_ALREADY_EXIST
+	fi	
+	
+	func_exec_func file_select_line "$file_name" "^[ 	]*\[${sec_name}\]"	##注意要转义
+	if [ $? -ne 0 ];then
+		return $ERROR
+	fi
+	
+	line_no=`echo ${RETURN[0]}`
+	((line_no+=1))
+	
+	##前插入一行
+	func_exec_func file_insert_line "$file_name" "$line_no" "${key_name}=${key_value}"
+	if [ $? -ne 0 ];then
+		return $ERROR
+	fi
+	
+	return 0
+}
+
+
+
+######################################################################
+#函数名: cfg_update_sec_key_value
+#功能:	写入一个键(键不存在返回错误)
+#
+#方法: 
+#输入: 1文件名 2段名 3键 4值
+#输出: 无
+#返回: 0 成功
+#	   ERR_CFG_PARA_ERROR:参数个数不对
+#	   ERR_CFG_FILE_NOT_EXIST:文件不存在
+#	   ERR_CFG_FILE_SEC_NOT_EXIST:段不存在
+#	   ERR_CFG_FILE_KEY_NOT_EXIST:键不存在
+#	   ERROR:添加不成功
+###################################################################
+function cfg_update_sec_key_value
+{
+    set -o noglob
+	typeset func_name=cfg_update_sec_key_value
+	
+	#START 李博修改问题单A01E33176参数错误的问题
+	if [ $# -ne 4 ];then
+		return $ERR_CFG_PARA_ERROR
+	fi
+	#END 李博修改问题单A01E33176参数错误的问题
+	
+	typeset file_name="$1"
+	typeset sec_name="$2"
+	typeset key_name="$3"
+	
+	assert_not_empty "$file_name" "File name is null!"
+	assert_not_empty "$sec_name" "Section name is null!"
+	assert_not_empty "$key_name" "Key name is null!"
+	
+	shift 3
+	typeset key_value
+	set -A key_value "$@"
+	
+	typeset -i sec_line_start
+	typeset -i sec_line_end
+	typeset key_line_buf
+
+	##判断键是否存在
+	cfg_is_exist_sec_key  "$file_name" "$sec_name"  "$key_name"
+	typeset rt=$?
+	if [ $rt -ne 0 ]
+	then
+		if [ $rt -eq $ERR_CFG_FILE_NOT_EXIST ]
+		then
+			return $ERR_CFG_FILE_NOT_EXIST
+		elif [ $rt -eq $ERR_CFG_FILE_SEC_NOT_EXIST ]
+		then
+			return $ERR_CFG_FILE_SEC_NOT_EXIST
+		elif [ $rt -eq $ERR_CFG_FILE_KEY_NOT_EXIST ]
+		then
+			return $ERR_CFG_FILE_KEY_NOT_EXIST
+		else
+			return $ERROR
+		fi
+	fi
+
+	##查找段所在的起始行和结束行
+	sec_line_start="`${SED} -n \"/^[ 	]*\[${sec_name}\]/=\" $file_name`"
+	sec_line_start="`echo $sec_line_start`"
+	((sec_line_start+=1))
+	sec_line_end="`${SED} -n \"$sec_line_start,/^[ 	]*\[.*\]/p\" $file_name | wc -l`"
+	sec_line_end="`echo $sec_line_end`"
+	((sec_line_end=sec_line_start+sec_line_end-1))
+	
+	##处理键名中的[和]
+	typeset tmp_key_name="`echo $key_name | ${SED} 's/\[/\\\[/g' | ${SED} 's/\]/\\\]/g'`"
+	
+	##生成临时文件名
+	#问题单a01d85894  解决临时文件过多 修改开始
+	func_exec_func file_new_tmp
+	if [ $? -ne 0 ];then
+		return $ERROR
+	fi
+	#typeset tmp_file="$BRZ_HOME_PATH/lib/func/temp_$$.tmp"
+	typeset tmp_file="${RETURN[0]}"
+        #问题单a01d85894  解决临时文件过多 修改开始
+
+	##查找键所在行并修改键值
+	typeset -i i=0
+	typeset line_no=1
+	typeset -i j=1   #指向当前行
+	typeset -i k=2   #指向当前域
+	typeset -i nf=0  #记录匹配行中以'#'符分隔的域数
+	typeset note=""  #记录域信息
+	typeset note_temp=""
+	typeset line_max=`wc -l ${file_name}|$AWK '{print $1}'`    #记录文本的行数
+	#set -x
+	while [ "${j}" -le "${line_max}" ]
+	do
+		key_line_buf=`${SED} -n "${j}"p "${file_name}"`      #读取行
+		if [ $line_no -ge $sec_line_start -a $line_no -le $sec_line_end ];then
+			echo "$key_line_buf" | $GREP "^[ 	]*$tmp_key_name[ 	]*=.*$" 1>${IDEPLOY_NULL} 2>${IDEPLOY_NULL}
+			if [ $? -eq 0 ];then
+				typeset length1=`echo "$key_line_buf"|$AWK -F' #' '{print length($1)}' 2>${IDEPLOY_NULL}`
+				typeset length2=`echo "$key_line_buf"|$AWK -F'\t#' '{print length($1)}' 2>${IDEPLOY_NULL}`
+				if [ ${length1} -ne ${length2} ];then
+					if [ ${length1} -lt ${length2} ];then    #空格+井号的分隔符在前
+						note=`echo "$key_line_buf"|$AWK -F' #' '{print substr($0,(length($1) + 2))}'`
+					else    #TAB+井号的分隔符在前
+						note=`echo "$key_line_buf"|$AWK -F'\t#' '{print substr($0,(length($1) + 2))}'`
+					fi
+					key_line_buf="$key_name=${key_value[i]}     $note"
+				else #行中无注释
+					key_line_buf="$key_name=${key_value[i]}"
+				fi
+				((i+=1))
+			fi    #end匹配成功，进行处理
+		fi       #end在指定段中查找指定的键名$tmp_key_name
+		echo "$key_line_buf" >> $tmp_file   #输出行
+		((line_no+=1))
+	((j+=1))
+	done 
+	
+	##注意要保持目标不变
+	cp $tmp_file $file_name
+	rm -f $tmp_file
+
+	#杨强修改结束 速度太慢
+	
+	return 0	
+}
+######################################################################
+#函数名: cfg_write_sec_key_value
+#功能:	写入一个键(键不存在添加,存在则覆盖):组合update和add
+#
+#方法: 
+#输入: 1文件名 2段名 3键 4值
+#输出: 无
+#返回: 0 成功
+#	   ERR_CFG_PARA_ERROR:参数个数不对
+#	   ERR_CFG_FILE_NOT_EXIST:文件不存在
+#	   ERR_CFG_FILE_SEC_NOT_EXIST:段不存在
+#	   ERROR:添加不成功
+###################################################################
+#cfg_write_sec_key_value()
+#{	
+#	return $ERR_ABSTRACT_FUNC
+#}
+function cfg_write_sec_key_value
+{
+	set -o noglob
+	typeset func_name=cfg_write_sec_key_value
+
+	if [ $# -ne 4 ];then
+		return $ERR_CFG_PARA_ERROR
+	fi
+	
+	typeset file_name="$1"
+	typeset sec_name="$2"
+	typeset key_name="$3"
+	typeset key_value="$4"
+	
+	assert_not_empty "$file_name" "File name is null!"
+	assert_not_empty "$sec_name" "Section name is null!"
+	assert_not_empty "$key_name" "Key name is null!"
+
+	cfg_is_exist_sec_key  "$file_name" "$sec_name"  "$key_name"
+	typeset rt=$?
+	if [ $rt -ne 0 ]
+	then
+		if [ $rt -eq $ERR_CFG_FILE_NOT_EXIST ]
+		then
+			return $ERR_CFG_FILE_NOT_EXIST
+		elif [ $rt -eq ERR_CFG_FILE_SEC_NOT_EXIST ]
+		then
+			return $ERR_CFG_FILE_SEC_NOT_EXIST
+		elif [ $rt -ne $ERR_CFG_FILE_KEY_NOT_EXIST ]
+		then
+			return $ERROR
+		fi
+	fi
+
+	if [ $rt -eq 0 ]
+	then
+		cfg_update_sec_key_value "$file_name" "$sec_name"  "$key_name" "$key_value"
+		if [ $? -ne 0 ];then
+			return $ERROR
+		fi
+	else
+		cfg_add_sec_key "$file_name" "$sec_name"  "$key_name" "$key_value"
+		if [ $? -ne 0 ];then
+			return $ERROR
+		fi
+	fi
+	return 0	 
+	
+}
+
+##############################################################################################
+#函数名: cfg_get_sec_key_value
+#功能: 在段键格式文件中的指定字段下获取某个键的值(如果相同键有多个则返回第一个)
+#
+#输入: 1文件名 2段名 3键 
+#输出: RETURN[0]为其键值 
+#返回: 0 成功
+#	   ERR_CFG_PARA_ERROR:参数个数不对
+#	   ERR_CFG_FILE_NOT_EXIST:文件不存在
+#	   ERR_CFG_FILE_SEC_NOT_EXIST:段不存在
+#	   ERR_CFG_FILE_KEY_NOT_EXIST:键不存在
+#	   ERROR:获取失败
+###########################################################################################
+function cfg_get_sec_key_value
+{	
+#	######公用的直接返回错误
+#	return $ERR_ABSTRACT_FUNC
+	
+	cfg_get_sec_key_values "$@"
+	typeset rt=$?
+	if [ $rt -ne 0 ]
+	then
+		return $rt
+	fi
+	
+	ret_set_one "${RETURN[0]}"	
+	return 0
+}
+
+
+##############################################################################################
+#函数名: cfg_get_sec_key_values
+#功能: 在段键格式文件中的指定字段下获取某个键的值(如果键有多个则返回多个值)
+#
+#输入: 1文件名 2段名 3键
+#输出: RETURN[0-?-1]为其值 RETNUM=?(从1开始)表示 返回的值的个数
+#返回: 0 成功
+#	   ERR_CFG_PARA_ERROR:参数个数不对
+#	   ERR_CFG_FILE_NOT_EXIST:文件不存在
+#	   ERR_CFG_FILE_SEC_NOT_EXIST:段不存在
+#	   ERR_CFG_FILE_KEY_NOT_EXIST:键不存在
+#	   ERROR:获取失败
+###########################################################################################
+function cfg_get_sec_key_values
+{
+    set -o noglob
+	typeset func_name=cfg_get_sec_key_values
+	
+	if [ $# -ne 3 ];then
+		return $ERR_CFG_PARA_ERROR
+	fi
+	
+	typeset file_name="$1"
+	typeset sec_name="$2"
+	typeset key_name="$3"	
+
+	typeset line_buf=""
+	typeset key_buf=""
+	
+	typeset loc_line_index=0
+	typeset ret_num=0
+	
+	assert_not_empty "$file_name" "File name is null!"
+	assert_not_empty "$sec_name" "Section name is null!"
+	assert_not_empty "$key_name" "Key name is null!"
+
+	cfg_is_exist_sec_key  "$file_name" "$sec_name"  "$key_name"
+	typeset rt=$?
+	if [ $rt -ne 0 ]
+	then
+		if [ $rt -eq $ERR_CFG_FILE_NOT_EXIST ]
+		then
+			return $ERR_CFG_FILE_NOT_EXIST
+		elif [ $rt -eq $ERR_CFG_FILE_SEC_NOT_EXIST ]
+		then
+			return $ERR_CFG_FILE_SEC_NOT_EXIST
+		elif [ $rt -eq $ERR_CFG_FILE_KEY_NOT_EXIST ]
+		then
+			return $ERR_CFG_FILE_KEY_NOT_EXIST
+		else
+			return $ERROR
+		fi
+	fi	
+	##杨强修改结束
+	
+	cfg_get_sec_value "$file_name" "$sec_name" 
+	if [ $? -ne 0 ];then
+		return $ERROR
+	fi
+	
+	while [ $loc_line_index -lt $RETNUM ]
+	do	
+		line_buf="`echo ${RETURN[loc_line_index]} | $AWK -F# '{print $1}'`"
+		line_buf="`echo $line_buf`"
+		((loc_line_index+=1))
+		
+		# 如果是空行,则继续读下一行
+		if [ -z "$line_buf" ]; then
+			continue
+		fi
+		
+		key_buf="`echo "${line_buf}" | ${AWK} -F= '{print $1}'`"
+		key_buf="`echo $key_buf`"
+		##杨强修改开始 多余
+#		key_buf=`echo ${key_buf}`
+		##杨强修改结束 多余	
+		if [ "$key_buf" = "$key_name" ]; then	# 如果找到，则添加到返回字符串后面
+			
+                        typeset -i line_buf_length="`echo "${line_buf}" | ${AWK} '{print length($0)}'`"
+                        typeset -i first_equal_index="`echo "${line_buf}" | ${AWK} '{print index($0,"=")}'`"
+                        ((first_equal_index=first_equal_index+1))
+                        #RETURN[$ret_num]="`echo "$line_buf" | ${AWK} -F= '{print $2}'`"
+			RETURN[$ret_num]="`echo "${line_buf}" | ${AWK} -v i="${first_equal_index}" -v j="${line_buf_length}" '{print substr($0,i,j)}'`"
+                        RETURN[$ret_num]="`echo ${RETURN[ret_num]}`"
+#			RETURN[$ret_num]=`echo ${RETURN[$ret_num]}`
+#			|${AWK} '
+#			{
+#				for(i=1;i<=NF;i++)
+#				{
+#					printf("%s",$i);
+#					if ( i < NF )
+#					{
+#						printf(" ");
+#					}
+#				}
+#			}'`			##注意：该处若换成其它的直接echo $..，不会去掉前后空格
+			
+			((ret_num+=1))
+		fi
+	done
+	
+	#杨强修改开始 清除多余的数据
+	while [ $RETNUM -gt $ret_num ]
+	do
+		((RETNUM-=1))
+		RETURN[$RETNUM]=""
+	done
+	#杨强修改结束 清除多余的数据
+
+	#杨强修改开始 多余
+	#comment by 方学维 38744 这里比较特殊不能使用 ret_set_num 函数进行设置
+	#不然RETURN[]数组中的数据会被清空
+	#RETNUM=$ret_num
+	#comment by 方学维 38744 这里比较特殊不能使用 ret_set_num 函数进行设置
+	#杨强修改结束 多余
+	
+	if [ $ret_num -lt 1 ];then
+		return $ERROR
+	fi	
+	return 0
+}
+
+##############################################################################################
+#函数名: cfg_get_sec_key_names
+#功能: 返回段键格式中某个段中的所有键名
+#
+#输入: 1文件名 2段名
+#输出: RETURN[?]为其键名 RETNUM=? 表示有多少个键名
+#返回: 0 成功
+#	   ERR_CFG_PARA_ERROR:参数个数不对
+#	   ERR_CFG_FILE_NOT_EXIST:文件不存在
+#	   ERR_CFG_FILE_SEC_NOT_EXIST:段不存在
+#	   ERROR:获取失败
+###########################################################################################
+function cfg_get_sec_key_names
+{
+	typeset file_name="$1"
+	typeset sec_name="$2"
+	#杨强修改开始
+	#原因：多余
+	#typeset key_name="$3"	
+	#杨强修改结束
+ 
+	typeset line_buf=""
+	
+	typeset loc_line_index=0
+	typeset ret_num=0
+	
+	#杨强修改开始
+	#原因：应只有两个参数
+	#if [ $# -ne 3 ];then
+	if [ $# -ne 2 ]; then
+	#杨强修改结束
+		return $ERR_CFG_PARA_ERROR
+	fi
+	
+	assert_not_empty "$file_name" "File name is null!"
+	assert_not_empty "$sec_name" "Section name is null!"
+	#杨强修改开始
+	#原因：多余
+	#assert_not_empty "$key_name"
+	#杨强修改结束
+
+	file_is_exist "$file_name"
+	if [ $? -ne 0  ];then		
+		return $ERR_CFG_FILE_NOT_EXIST		
+	fi		
+	
+	cfg_is_exist_sec "$file_name" "$sec_name"
+	if [ $? -ne 0 ];then
+		return $ERR_CFG_FILE_SEC_NOT_EXIST
+	fi
+	
+	#杨强修改开始
+	#原因：多余
+	#cfg_is_exist_sec_key  "$file_name" "$sec_name"  "$key_name"
+	#if [ $? -ne 0 ];then
+	#	return $ERR_CFG_SEC_KEY_NOT_EXIST
+	#fi	
+	#杨强修改结束
+	
+	cfg_get_sec_value "$file_name" "$sec_name" 
+	if [ $? -ne 0 ];then
+		return $ERROR
+	fi
+	
+	while true
+	do
+	
+		if [ $loc_line_index -ge $RETNUM ];then
+			break
+		fi
+
+
+		line_buf="${RETURN[loc_line_index]}"
+		((loc_line_index+=1))	
+	
+		# 如果是空行,则继续读下一行
+		if [ "X$line_buf" = "X" ]; then
+			continue
+		fi
+				
+		# 如果是注释,则继续读下一行
+		ncount=`echo "$line_buf" | ${GREP} -v "^[ 	]*#"|wc -l`
+		if [ $ncount -eq 0 ]; then
+			continue
+		fi		
+		line_buf=`echo "$line_buf"|${AWK} -F= '{print $1}'|${AWK} '{print $1}'`
+		if [ "$line_buf" != "" ];then
+			RETURN[$ret_num]="$line_buf"
+			((ret_num+=1))				
+		fi
+	done	
+		
+	RETNUM=$ret_num
+		
+	if [ $ret_num -ge 1 ];then
+		return 0
+	else
+		return $ERROR
+	fi	
+
+}
+
+##############################################################################################
+#函数名: cfg_update_ini
+#功能: 以文件 source_file 中的键值替换文件 dest_file 中对应的键值
+#
+#输入: 1文件file1 2文件file2
+#输出: 无
+#返回: 0 成功
+#	   ERR_CFG_FILE_NOT_EXIST:文件不存在
+#      ERR_CFG_FILE_SEC_NOT_EXIST:对应段不存在
+#      ERR_CFG_FILE_KEY_NOT_EXIST:对应键不存在
+#      ERR_CFG_FILE_KEY_DUPLICATE:键重复
+#	   ERROR:获取失败
+###########################################################################################
+function cfg_update_ini
+{
+	typeset source_file="$1"
+	typeset dest_file="$2"
+	
+	if [ $# -ne 2 ];then
+		return $ERR_CFG_PARA_ERROR
+	fi			
+	
+	#测试参数是否合法
+	assert_not_empty "$source_file" "Source file name is null!"
+	assert_not_empty "$dest_file" "Dest file name is null!"
+	
+	#检查文件是否存在
+	if [ ! -f "$source_file" -o ! -f "$dest_file" ]
+	then
+		return $ERR_CFG_FILE_NOT_EXIST
+	fi
+	
+	#复制键值
+	typeset -i i
+	typeset -i j
+	typeset -i sec_count
+	typeset -i key_count
+	typeset section
+	typeset keys
+	typeset oldvalue
+	typeset newvalue
+	
+	#读取 source_file 中的段列表
+	cfg_get_sec_names "$source_file"
+	if [ $? -ne 0 ]
+	then
+		return $ERROR
+	fi	
+	sec_count=$RETNUM
+	set -A section "${RETURN[@]}"
+
+	i=0
+	while [ $i -lt $sec_count ]
+	do
+		cfg_is_exist_sec "$dest_file" "${section[i]}"
+		if [ $? -eq 0 ]
+		then
+			cfg_get_sec_key_names "$source_file" "${section[i]}"
+			if [ $? -ne 0 ]
+			then
+				return $ERROR
+			fi	
+			key_count=$RETNUM
+			set -A keys "${RETURN[@]}"
+			
+			j=0
+			while [ $j -lt $key_count ]
+			do
+				cfg_is_exist_sec_key "$source_file" "${section[i]}" "${keys[j]}"
+				if [ $RETNUM -ne 1 ]
+				then
+					return $ERR_CFG_FILE_KEY_DUPLICATE
+				fi
+				
+				cfg_is_exist_sec_key "$dest_file" "${section[i]}" "${keys[j]}"
+				if [ $? -eq 0 ]
+				then
+					if [ $RETNUM -ne 1 ]
+					then
+						return $ERR_CFG_FILE_KEY_DUPLICATE
+					fi
+					
+					#读取新键值
+					cfg_get_sec_key_values "$source_file" "${section[i]}" "${keys[j]}"
+					if [ $? -ne 0 ]
+					then
+						return $ERROR
+					fi
+					newvalue="${RETURN[0]}"
+					
+					#读取旧键值
+					cfg_get_sec_key_values "${dest_file}" "${section[i]}" "${keys[j]}"
+					if [ $? -ne 0 ]
+					then
+						return $ERROR
+					fi
+					oldvalue="${RETURN[0]}"
+					#如果新值与旧值不相等，则将新值写入，否则不写
+                    if [ "X${oldvalue}" != "X${newvalue}" ]
+					then
+					    #写入键值
+					    cfg_update_sec_key_value "$dest_file" "${section[i]}" "${keys[j]}" "${newvalue}"
+					    if [ $? -ne 0 ]
+					    then
+						    return $ERROR
+					    fi
+					fi
+				else
+					return $ERR_CFG_FILE_KEY_NOT_EXIST
+				fi
+				((j=j+1))
+			done
+		else
+			return $ERR_CFG_FILE_SEC_NOT_EXIST
+		fi
+		((i=i+1))
+	done
+	return 0
+}
+
+##################################################################################
+##############################################################################################
+#author:guhao 2011.4.28
+#函数名: cfg_delete_sec_key
+#功能: 在段键格式文件中的删除指定字段下某个键(如果键有多个则删除多个)
+#注意的是删除的key值形式为"${key}=*"
+#输入: 1文件名 2段名 3键名
+#返回: 0 成功
+#	   ERR_CFG_PARA_ERROR:参数个数不对
+#	   ERR_CFG_FILE_NOT_EXIST:文件不存在
+#	   ERR_CFG_FILE_SEC_NOT_EXIST:段不存在
+#	   ERR_CFG_FILE_KEY_NOT_EXIST:段不存在
+#	   ERROR:获取失败
+###########################################################################################
+function cfg_delete_sec_key
+{
+	
+	if [ $# -ne 3 ];then
+		return $ERR_CFG_PARA_ERROR
+	fi
+	
+	typeset file_name="$1"
+	typeset sec_name="$2"
+	typeset key_name="$3"
+	
+	assert_not_empty "$file_name" "File name is null!"
+	assert_not_empty "$sec_name" "Section name is null!"
+	assert_not_empty "$key_name" "Key name is null!"
+	cfg_is_exist_sec_key  "$file_name" "$sec_name" "$key_name"
+	typeset rt=$?
+	if [ $rt -ne 0 ]
+	then
+		if [ $rt -eq $ERR_CFG_FILE_NOT_EXIST ]
+		then
+			return $ERR_CFG_FILE_NOT_EXIST
+		elif [ $rt -eq $ERR_CFG_FILE_SEC_NOT_EXIST ]
+		then
+			return $ERR_CFG_FILE_SEC_NOT_EXIST
+		elif [ $rt -eq $ERR_CFG_FILE_KEY_NOT_EXIST ]
+		then
+			return $ERR_CFG_FILE_KEY_NOT_EXIST	
+		else
+			return $ERROR
+		fi
+	fi	
+
+	typeset tmp_delete_sec_key_file=temp_tmp_delete_sec_key_file_$$
+    ${AWK}  -v des_sec_name=${sec_name} -v des_key_name=${key_name} 'BEGIN {tmp_sec_name=0;} 
+		{
+			if ($0 ~ "^[ \t]*\\[[ \t]*.*[ \t]*\\][ \t]*$") 
+			{ 
+				tmp_sec_name=$0;
+			}
+			
+			if ( tmp_sec_name !~ "^[ \t]*\\[[ \t]*"des_sec_name"[ \t]*\\][ \t]*$" )  
+				print $0;
+			else 
+			{
+				if ( $0 !~ "^[ \t]*"des_key_name"[ \t]*=[ \t]*$" ) 
+					print $0; 
+			}}'  "${file_name}" > ${tmp_delete_sec_key_file}
+	if [ $? -ne 0 ];then
+		return $ERROR
+	fi
+	cp ${tmp_delete_sec_key_file} ${file_name}
+	rm ${tmp_delete_sec_key_file}
+    return 0;
+}
+
+##############################################################################################
+#author:guhao 2011.5.3
+#函数名: cfg_write_sec
+#功能: 在段键格式文件中的添加指定字段,如果段存在，就删除后重新添加段信息
+#
+#输入: 1文件名 2段名 3段内容
+#返回: 0 成功
+#	   ERR_CFG_PARA_ERROR:参数个数不对
+#	   ERR_CFG_FILE_NOT_EXIST:文件不存在
+#	   ERR_CFG_FILE_SEC_NOT_EXIST:段不存在
+#	   ERROR:获取失败
+###########################################################################################
+function cfg_write_sec 
+{
+	if [ $# -ne 3 ];then
+		return $ERR_CFG_PARA_ERROR
+	fi
+	
+	typeset file_name="$1"
+	typeset sec_name="$2"
+	typeset sec_value="$3"
+	
+	assert_not_empty "$file_name" "File name is null!"
+	assert_not_empty "$sec_name" "Section name is null!"
+	
+	cfg_is_exist_sec  "$file_name" "$sec_name" 
+	typeset rt=$?
+	if [ $rt -ne 0 ]
+	then
+		if [ $rt -eq $ERR_CFG_FILE_NOT_EXIST ]
+		then
+			return $ERR_CFG_FILE_NOT_EXIST
+		elif [ $rt -eq $ERR_CFG_FILE_SEC_NOT_EXIST ]
+		then
+			echo "" >> "${file_name}"
+			echo "[${sec_name}]" >> "${file_name}"
+			echo "${sec_value}" >> "${file_name}"
+			return 0
+		else
+			cfg_delete_sec "$file_name" "$sec_name" 
+			if [ $? -ne 0 ];then
+				return $ERROR
+			fi
+			echo "" >> "${file_name}"
+			echo "[${sec_name}]" >> "${file_name}"
+			echo "${sec_value}" >> "${file_name}"
+			return 0
+		fi
+	fi	
+    return $ERROR;
+}
+######################################################################
+#author:guhao 2011.5.17
+#函数名: cfg_write_sec_key_value2
+#功能:	写入一个键(键不存在添加至段末尾,存在则覆盖):组合update和add
+##新增的key值追加到这个段的末尾 guhao 2011 5.13
+#方法: 
+#输入: 1文件名 2段名 3键 4值
+#输出: 无
+#返回: 0 成功
+#	   ERR_CFG_PARA_ERROR:参数个数不对
+#	   ERR_CFG_FILE_NOT_EXIST:文件不存在
+#	   ERR_CFG_FILE_SEC_NOT_EXIST:段不存在
+#	   ERROR:添加不成功
+###################################################################
+
+function cfg_write_sec_key_value2
+{
+	if [ $# -ne 4 ];then
+		return $ERR_CFG_PARA_ERROR
+	fi
+	
+	typeset file_name="$1"
+	typeset sec_name="$2"
+	typeset key_name="$3"
+	typeset key_value="$4"
+	typeset next_sec_name=""
+	typeset file_name1="hhh.txt"
+	assert_not_empty "$file_name" "File name is null!"
+	assert_not_empty "$sec_name" "Section name is null!"
+	assert_not_empty "$key_name" "Key name is null!"
+
+	cfg_is_exist_sec_key  "$file_name" "$sec_name"  "$key_name"
+	typeset rt=$?
+	typeset tmp_file_list="/tmp/cfg_insert_sec_key_file_list_$$"
+	if [ $rt -ne 0 ]
+	then
+		if [ $rt -eq $ERR_CFG_FILE_NOT_EXIST ]
+		then
+			return $ERR_CFG_FILE_NOT_EXIST
+		elif [ $rt -eq $ERR_CFG_FILE_SEC_NOT_EXIST ]
+		then
+			return $ERR_CFG_FILE_SEC_NOT_EXIST
+		fi
+	fi
+
+	if [ $rt -eq 0 ]
+	then
+		cfg_update_sec_key_value "$file_name" "$sec_name"  "$key_name" "$key_value"
+		if [ $? -ne 0 ];then
+			return $ERROR
+		fi
+	else
+		cfg_add_sec_key2 "$file_name" "$sec_name"  "$key_name" "$key_value"
+		if [ $? -ne 0 ];then
+			return $ERROR
+		fi	
+	fi
+	return 0	 
+}
+######################################################################
+#函数名: cfg_add_sec_key2
+#功能:	在文件末尾添加一个key
+#
+#方法:给一个文件里添加一个key
+#输出: 无
+#输入: 1文件名 2段名 3键 4值
+#返回: 0 成功
+#	   ERR_CFG_PARA_ERROR:参数个数不对
+#	   ERR_CFG_FILE_NOT_EXIST:文件不存在
+#	   ERR_CFG_FILE_SEC_NOT_EXIST:段不存在
+#	   ERR_CFG_SEC_KEY_ALREADY_EXIST:键已经存在了
+#	   ERROR:添加不成功
+###################################################################
+function cfg_add_sec_key2
+{
+	
+	typeset file_name="$1"
+	typeset sec_name="$2"
+	typeset key_name="$3"
+	typeset key_value="$4"
+	if [ $# -ne 4 ];then
+		return $ERR_CFG_PARA_ERROR
+	fi
+	
+	assert_not_empty "$file_name" "File name is null!"
+	assert_not_empty "$sec_name" "Section name is null!"
+	assert_not_empty "$key_name" "Key name is null!"	
+	
+	file_is_exist "$file_name"
+	if [ $? -ne 0 ];then
+		return $ERR_CFG_FILE_NOT_EXIST
+	fi	
+	
+	##段是否存在
+	cfg_is_exist_sec "$file_name" "$sec_name"
+	if [ $? -ne 0 ];then
+		return $ERR_CFG_FILE_SEC_NOT_EXIST
+	fi
+	
+	cfg_is_exist_sec_key "$file_name" "$sec_name" "$key_name"
+	if [ $? -eq 0 ];then
+		return $ERR_CFG_SEC_KEY_ALREADY_EXIST
+	fi	
+	
+	typeset next_sec_name=$(${AWK} -F# '{ print $1 }' "${file_name}" |
+		${SED}  '/^[ \t]*$/d' |
+		${AWK} -v des_sec_name=${sec_name} 'BEGIN {
+			tem_section=0;
+			flag=0;
+		} 
+		{
+			if ($0 ~ "^[ \t]*\\[[ \t]*.*[ \t]*\\][ \t]*$")
+			{
+				tem_section=$0;
+			}
+
+			if ( tem_section ~ "^[ \t]*\\[[ \t]*" des_sec_name "[ \t]*\\][ \t]*$" )
+			{
+				flag=1;
+			}
+			
+			if ((flag == "1") && (tem_section !~ "^[ \t]*\\[[ \t]*" des_sec_name "[ \t]*\\][ \t]*$"))
+			{
+				print $0; exit(0);
+			}
+		}' ) 
+		typeset rt=0
+		if [ "x${next_sec_name}" = "x" ];then
+			echo "" >> "${file_name}" ##void that the last line is not empty line
+			echo "${key_name}=${key_value}" >> "${file_name}"
+			rt=$?
+		else
+			${SED}  -i "/\\${next_sec_name}$/ i \
+	${key_name}=${key_value}"  ${file_name} 
+			rt=$?
+		fi
+		
+		if [ ${rt} -eq 0 ];then
+			return $ERROR
+		fi	
+	return 0
+}
+
+

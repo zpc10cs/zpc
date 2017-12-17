@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<assembly>
+	<id>dsdp.demo.business</id>
+	<formats>
+		<format>jar</format>
+	</formats>
+	<includeBaseDirectory>false</includeBaseDirectory>
+	<includeSiteDirectory>false</includeSiteDirectory>
+	<moduleSets>
+		<moduleSet>
+			<includes>
+				<include>com.huawei.jaguar:dsdp.demo.business</include>
+			</includes>
+			<binaries>
+				<includeDependencies>false</includeDependencies>
+				<unpack>true</unpack>
+				<unpackOptions>
+					<excludes>
+						<exclude>dsdp/demo/spring/*.properties</exclude>
+					</excludes>
+				</unpackOptions>
+			</binaries>
+		</moduleSet>
+	</moduleSets>
+</assembly>

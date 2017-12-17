@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="gb2312"?>
+<net_system desc="net structure">
+	<net_list>
+		<net name="up_small" desc="xms_nets_desc">
+			<ne name= "DSDPDEMO" desc="dsdpdemo_node_desc" associate="DSDPDEMO" style="tree" require_host="optional" />
+		</net>
+	</net_list>
+	
+</net_system>
+
+

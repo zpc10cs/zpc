@@ -1,0 +1,16 @@
+<cluster>
+	<connector>
+		<name>dsdpdemo.configerZKClient</name>
+		<url>10.186.22.208:2181</url>
+		<retryTimes>5</retryTimes>
+		<retryIntervalMs>3000</retryIntervalMs>
+		<connectionTimeoutMs>30000</connectionTimeoutMs>
+		<sessionTimeoutMs>60000</sessionTimeoutMs>
+		<module>dsdpdemo</module>
+		<initNodePath>/config/grading,/config/dsdpdemo/resource,/config/dsdpdemo/serviceConfig,/config/dsdpdemo/symbolNodePath</initNodePath>
+		<symbolNodePath>/config/dsdpdemo/symbolNodePath</symbolNodePath>
+		<resourcePath>dsdpdemo.resource.properties|/config/dsdpdemo/resource,dsdpdemo.serviceConfig.properties|/config/dsdpdemo/serviceConfig</resourcePath>
+		<errorCoderesourcePath>dsdpdemo.resultcode.properties|/config/resultcode/dsdpdemo</errorCoderesourcePath>
+		<dumpFixedSeconds>1000</dumpFixedSeconds>
+	</connector>
+</cluster>

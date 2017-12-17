@@ -1,0 +1,22 @@
+alias startapp "${HOME}/bin/startapp.sh \!*"
+alias stopapp "${HOME}/bin/stopapp.sh \!*"
+alias statusapp "${HOME}/bin/statusapp.sh \!*"
+alias cfg '${HOME}/bin/cdcheck.sh cfg \!* && cd "`${HOME}/bin/cdpath.sh cfg \!*`"'
+alias log '${HOME}/bin/cdcheck.sh log \!* && cd "`${HOME}/bin/cdpath.sh log \!*`"'
+alias bin '${HOME}/bin/cdcheck.sh bin \!* && cd "`${HOME}/bin/cdpath.sh bin \!*`"'
+
+
+
+alias showerr "${HOME}/bin/showerr \!*"
+alias showcfg 'ksh -c "${HOME}/bin/showcfg \!*"'
+alias updatecfg "${HOME}/bin/updatecfg \!*"
+alias logview "${HOME}/bin/logview.sh \!*"
+alias logset "${HOME}/bin/logset \!*"
+alias redisview "${HOME}/bin/redisview \!*"
+
+alias version "${HOME}/bin/version.sh \!*"
+
+set prompt="<\! `hostname` [$LOGNAME] : %/>"
+
+umask 027
+

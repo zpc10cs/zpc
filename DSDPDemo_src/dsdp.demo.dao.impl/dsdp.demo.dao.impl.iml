@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module org.jetbrains.idea.maven.project.MavenProjectsManager.isMavenModule="true" type="JAVA_MODULE" version="4">
+  <component name="NewModuleRootManager" LANGUAGE_LEVEL="JDK_1_6">
+    <output url="file://$MODULE_DIR$/target/classes" />
+    <output-test url="file://$MODULE_DIR$/target/test-classes" />
+    <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/src/main/java" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/src/main/resources" type="java-resource" />
+      <sourceFolder url="file://$MODULE_DIR$/src/test/java" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/src/test/resources" type="java-test-resource" />
+      <excludeFolder url="file://$MODULE_DIR$/target" />
+    </content>
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+    <orderEntry type="library" name="Maven: mysql:mysql-connector-java:5.0.5" level="project" />
+    <orderEntry type="module" module-name="dsdp.demo.dao" />
+    <orderEntry type="library" name="Maven: com.huawei.jaguar:commons.sdk.data-integrate:unknown" level="project" />
+    <orderEntry type="library" scope="RUNTIME" name="Maven: com.huawei.jaguar:commons.sdk.data-integrate.impl:unknown" level="project" />
+    <orderEntry type="library" name="Maven: org.springframework:spring-jdbc:unknown" level="project" />
+    <orderEntry type="library" name="Maven: org.springframework:spring-tx:unknown" level="project" />
+    <orderEntry type="library" name="Maven: org.springframework:spring-orm:unknown" level="project" />
+    <orderEntry type="library" name="Maven: org.mybatis:mybatis:unknown" level="project" />
+    <orderEntry type="library" name="Maven: com.oracle.jdbc:com.springsource.oracle.jdbc:unknown" level="project" />
+    <orderEntry type="module" module-name="dsdp.demo.ut.frame" scope="TEST" />
+  </component>
+</module>

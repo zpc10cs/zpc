@@ -1,0 +1,160 @@
+#!/bin/sh 
+# ****************************************************************************
+#                                                                            *
+#  monitor.sh: This is for Jaguar Platform                                   *
+#                                                                            *
+#  Copyright by Huawei Tech. Co., Ltd.                                       *
+#  All rights reserved                                                       *
+#                                                                            *
+# ****************************************************************************
+# Not set JAVA_HOME exit
+
+
+function show_help
+{	
+    echo "usage:  redisview -m modulename -k key"
+    echo "e.g. redisview -m upm -k key"
+    echo "-h         print this infomation."
+    echo " -k <arg>   Need to check the key"
+    echo " -m <arg>   modulename, for example: tag"
+    echo " 				"
+}
+
+
+if [ -z "$JAVA_HOME" ]
+then
+    echo "JAVA_HOME not set, please set it and try again"
+    exit 1
+fi
+APP_HOME=$(cd "$(dirname "$0")"; pwd)
+# java cmd
+if [ "x$JAVA" = "x" ]; then
+    JAVA="$JAVA_HOME/bin/java"
+fi
+
+JAVA_OPTS=" \
+           -server \
+           -Xms1024m \
+           -Xmx2048m \
+           -Xmn128m \
+           -XX:+DisableExplicitGC \
+           -XX:+UseConcMarkSweepGC \
+           -XX:+UseParNewGC \
+           -XX:PermSize=64m \
+           -XX:MaxPermSize=128m \
+           -XX:MinHeapFreeRatio=40 \
+           -XX:MaxHeapFreeRatio=70 \
+           -XX:CMSInitiatingOccupancyFraction=65 \
+           -Dsun.rmi.dgc.server.gcInterval=0x7FFFFFFFFFFFFFE \
+           -Dsun.rmi.dgc.client.gcInterval=0x7FFFFFFFFFFFFFE"
+
+JAVA_OPTS="-Djava.security.egd=file:///dev/urandom $JAVA_OPTS"
+#DEBUG_OPTS="-Xdebug -Xrunjdwp:transport=dt_socket,server=y,address=58787,suspend=y"
+#JAVA_OPTS="$JAVA_OPTS $DEBUG_OPTS"
+
+sum=1
+for line in $*
+    do
+        let "sum=$sum + 1"
+         
+        if [ "$line" = "-k" ]; then
+            key=${!sum}
+        fi  
+        
+        if [ "$line" = "-m" ]; then
+            compName=${!sum} 
+        fi		
+    done
+
+if [ -n "$compName" ]; then
+    if [ 0 -eq $? ]; then
+        tempFileName=tmp_file_`date +%s`.bak	
+        #read compinfo.cfg
+        awk -F# '{print $1}' "$APP_HOME/compinfo.cfg" |     
+        sed '/^[    ]*$/d' |                    
+        sed -n "/^[     ]*\[[   ]*$compName[  ]*\]/,/^[       ]*\[.*\]/p" | 
+        sed '/^[        ]*\[.*\]/d' > $tempFileName    
+        typeset ip_info=$(cat $tempFileName | grep redisaddr | awk -F= '{print $2}')	
+        if [ -n "$ip_info" ]; then	
+            inputs=$ip_info
+        else
+            echo "can not find  $compName ip and port!"
+            show_help
+            exit 1
+        fi
+        rm $tempFileName     
+    else 
+        echo "Invalid module name!"		
+        show_help
+        exit 1
+    fi
+else   
+   show_help
+   exit 1
+fi
+compNameList=`cat $APP_HOME/compinfo.cfg | grep "\["  | awk -F '[' '{print $2}' | awk -F ']' '{print $1}'`
+
+compNameList=${compNameList/monitor/}
+
+# get libpath from compinfo.cfg
+GetLibPath()
+{
+    tempFileName=tmp_file_`date +%s`.bak
+            
+    #read compinfo.cfg
+    awk -F# '{print $1}' "$APP_HOME/compinfo.cfg" |     
+    sed '/^[    ]*$/d' |                    
+    sed -n "/^[     ]*\[[   ]*$1[  ]*\]/,/^[       ]*\[.*\]/p" | 
+    sed '/^[        ]*\[.*\]/d' > $tempFileName    
+
+    comp_path=$(cat $tempFileName | grep libpath | awk -F= '{print $2}')
+    
+    rm $tempFileName
+
+    echo $comp_path | sed 's/[ \r]*$//g'
+}
+
+# get confpath from compinfo.cfg
+GetConfPath()
+{
+    tempFileName=tmp_file_`date +%s`.bak
+       
+    #read compinfo.cfg
+    awk -F# '{print $1}' "$APP_HOME/compinfo.cfg" |     
+    sed '/^[    ]*$/d' |                    
+    sed -n "/^[     ]*\[[   ]*$1[  ]*\]/,/^[       ]*\[.*\]/p" | 
+    sed '/^[        ]*\[.*\]/d' > $tempFileName    
+
+    conf_path=$(cat $tempFileName | grep confpath | awk -F= '{print $2}')
+    rm $tempFileName
+    echo $conf_path |sed 's/[ \r]*$//g'
+}
+
+# lib home
+APPLIB=$(GetLibPath $compName)
+CONF_HOME=$(GetConfPath $compName)
+
+APP_CLASSPATH="`find "$APPLIB" -name "*.jar" | sed 's/$/:/g'`"
+
+#echo "$APP_CLASSPATH"
+for k in $APP_CLASSPATH;
+   do TEMP_CLASSPATH=$k"$TEMP_CLASSPATH";
+done
+
+APP_CLASSPATH=$TEMP_CLASSPATH:$CONF_HOME	
+
+# lib home
+ToolsLIB="$APP_HOME/tools"
+
+# app dependency jars
+Tools_CLASSPATH="`find "$ToolsLIB" -name "*.jar" | sed 's/$/:/g'`"
+for J in $Tools_CLASSPATH;
+   do Tools_TEMP_CLASSPATH=$J"$Tools_TEMP_CLASSPATH";
+done
+
+
+APP_CLASSPATH=$APP_CLASSPATH:$Tools_TEMP_CLASSPATH
+
+
+export LANG=zh_CN.gbk
+"$JAVA" $JAVA_OPTS -classpath "$APP_CLASSPATH" com.huawei.jaguar.commons.redis.client.RedisCliTool -k $key -m $compName -s $inputs $compNameList

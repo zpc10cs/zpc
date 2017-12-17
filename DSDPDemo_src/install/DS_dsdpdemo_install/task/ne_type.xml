@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="gb2312"?>
+
+<!-- 定义网元类型配置文件 -->
+<ne_type desc="neDesc">
+    <pkg_list>
+		<pkg id="jdk" name="apppkg/java[0-9]\.[0-9]_[0-9]{2}x_suse\.tar.gz"/>		
+		<pkg id="uniAgent" name="apppkg/dAgent_V[0-9]{3}R[0-9]{3}C[0-9]{2}.*\.tar\.gz" />		
+		<pkg id="micro-container" name="apppkg/commons.micro-container_V[0-9]{3}R[0-9]{3}C[0-9]{2}B[0-9]{3}.*\.tar\.gz"/>
+		<pkg id="dsdpdemo" name="apppkg/DSDPDEMO_V[0-9]{3}R[0-9]{3}C[0-9]{2}.*\.tar\.gz,apppkg/DSDPDEMODB_V[0-9]{3}R[0-9]{3}C[0-9]{2}.*\.tar\.gz"/>
+	</pkg_list>
+    <type_list>		                  
+        <type name="DSDPDEMO" desc="dsdpdemo_node_desc"
+			  pkg-refer="jdk,uniAgent,micro-container,dsdpdemo"
+			  config-refer="COMMON,oracle_config,basic_app_info,service_config"
+			  step-refer="checkenv,install_db,install_commons,install_dsdp,start,status_test"/>
+		</type_list>
+</ne_type>
+

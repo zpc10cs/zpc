@@ -1,0 +1,103 @@
+
+#start application
+function start_app
+{
+    dos2unix -r $HOME/subscribe/conf/*
+    #check relative component
+    ${HOME}/bin/status -m ${component}
+    ${HOME}/bin/stopapp.sh ${component}
+    sleep 20
+}
+
+#cut version 
+function app_cut_noneed_update_version
+{
+    # get the latest version
+	typeset version_num=$(cat ${HOME}/${component}/version/baseline-${component}-version.cfg | head -n 1 | awk -F\| '{print $2}') 
+	
+	# get the update_order versions
+	typeset version_order_cfg=$(cat ${component}_update_order.properties | awk -F\/ '{print $1}' )
+
+	typeset noneed_update_version=""
+
+	for version_order_tmp in $version_order_cfg
+	do
+		echo $version_order_tmp
+		if [[ "${version_order_tmp}" < "${version_num}" ]] ;then
+				noneed_update_version="${version_order_tmp} ${noneed_update_version}"
+		fi
+	done
+	
+	for noneed_update_version_tmp in $noneed_update_version
+	do
+		sed -i "/${noneed_update_version_tmp}/d" ${component}_update_order.properties
+	done
+	
+	return 0
+}
+
+function update_comp_version
+{
+	return 0
+}
+
+#backup files
+function backup_app_file
+{
+set -x
+	cfg_update_sec_key_value "patch.cfg" "backup_dir" "latest_backup_data" "${backup_dir}"
+	if [ $? -ne 0 ];then
+		install_log "ERROR" "${component}" "invoke function:: cfg_update_sec_key_value():patch.cfg:backup_dir:latest_backup_data failed."
+		return 1
+	fi
+
+	cfg_get_sec_value "patch.cfg" "backup_files"
+	if [ ${RETNUM} -ne 0 ];then
+		num=0
+		while [ ${num} -lt ${RETNUM} ]
+		do
+			files_name="${RETURN[${num}]}"
+			backup_files "${files_name}" "${backup_dir}"
+			if [ $? -ne 0 ];then
+				install_log "ERROR" "${component}" "invoke function:: backup_files() failed."
+				return 1
+			fi
+			((num=${num}+1))
+		done
+	else
+		install_log "DEBUG" "${component}" "backup_files is null,no need to backup."
+	fi
+
+	return 0
+}
+
+function backup_files
+{
+	typeset cp_command=""
+	typeset src_path="$HOME/${1}"
+	typeset file_path=$(dirname $1)
+	typeset backup_date=$2
+	typeset backup_dir=$HOME/${backup_date}
+	typeset dest_path="${backup_dir}/${file_path}"
+
+	mkdir -p ${backup_dir}/${file_path}
+
+	if [ -d  ${src_path} ];then
+		cp_command="cp -R"
+	elif [ -f ${src_path} ];then
+		cp_command="cp"
+	elif [ ! -e ${src_path} ];then
+		install_log "ERROR" "${component}" "File :${src_path} is not exist."
+		return 1
+	fi
+	
+	${cp_command} ${src_path} ${dest_path}
+	return 0
+}
+
+#backup zookeeper
+function backup_zk
+{
+	RETURN[0]=""
+	return 0
+}

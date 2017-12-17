@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="gb2312"?>
+<itemlist>
+	<item name="check1" checkStandard="checkStandard1" exec="ideploy_wrap.sh" suggestion="suggestion1" useRoot="true"/>
+	<item name="check2" checkStandard="checkStandard2" exec="ideploy_wrap.sh" suggestion="suggestion2" useRoot="false"/>
+	<item name="check3" checkStandard="checkStandard3" exec="ideploy_wrap.sh" suggestion="suggestion3" useRoot="false"/>
+	<item name="check4" checkStandard="checkStandard4" exec="ideploy_wrap.sh" suggestion="suggestion4" useRoot="false"/>
+	<item name="check5" checkStandard="checkStandard5" exec="ideploy_wrap.sh" suggestion="suggestion5" useRoot="false"/>
+</itemlist>
+
+
+

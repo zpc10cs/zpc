@@ -1,0 +1,92 @@
+#!/usr/bin/ksh
+
+################################################################################
+# name	:	init_basic_info
+# describe:	initial the basic config of current machine
+# parameter list: null
+# input	  : null
+# output  : 0 success 1 failure
+# rerurn  : null
+# invoker : main
+################################################################################
+function init_basic_info
+{
+	typeset log_prefix="function init_dm_type::"
+	typeset -i flag=0
+	
+	#get dm_type
+	get_dm_type
+	if [ $? -ne 0 ]
+	then
+		install_log "DEBUG" "CHECK_ENV" "${log_prefix} invoke get_dm_type error ."
+		install_log "ERROR" "CHECK_ENV" "get dual host type failed,more detail of fail info please to see ${log_file}."
+		((flag=flag+1))
+	fi
+	dm_type="${RETURN[0]}"
+	
+	#get host type
+	get_host_type
+	if [ $? -ne 0 ]
+	then
+		install_log "DEBUG" "CHECK_ENV" "${log_prefix} invoke get_host_type error ."
+		install_log "ERROR" "CHECK_ENV" "get machine type in dual host failed,more detail of fail info please to see ${log_file}."
+		((flag=flag+1))
+	fi
+	host_type="${RETURN[0]}"
+	
+	#get host ip
+	get_host_ip
+	if [ $? -ne 0 ]
+	then
+		install_log "DEBUG" "CHECK_ENV" "${log_prefix} invoke get_host_ip error ."
+		install_log "ERROR" "CHECK_ENV" "get host ip in single or dual host failed,more detail of fail info please to see ${log_file}."
+		((flag=flag+1))
+	fi
+	host_ip="${RETURN[0]}"
+	
+	#get standby ip
+	get_standby_ip
+	if [ $? -ne 0 ]
+	then
+		install_log "DEBUG" "CHECK_ENV" "${log_prefix} invoke standby_ip error ."
+		install_log "ERROR" "CHECK_ENV" "get standby ip in dual host failed,more detail of fail info please to see ${log_file}."
+		((flag=flag+1))
+	fi
+	standby_ip="${RETURN[0]}"
+	
+	#get float ip
+	get_float_ip
+	if [ $? -ne 0 ]
+	then
+		install_log "DEBUG" "CHECK_ENV" "${log_prefix} invoke get_float_ip error ."
+		install_log "ERROR" "CHECK_ENV" "get float ip of dual host failed,more detail of fail info please to see ${log_file}."
+		((flag=flag+1))
+	fi
+	float_ip="${RETURN[0]}"
+	
+	#get localhost ip
+	get_localhost_ip
+	if [ $? -ne 0 ]
+	then
+		install_log "DEBUG" "CHECK_ENV" "${log_prefix} invoke get_localhost_ip error ."
+		install_log "ERROR" "CHECK_ENV" "get local host ip failed,more detail of fail info please to see ${log_file}."
+		((flag=flag+1))
+	fi
+	localhost_ip="${RETURN[0]}"
+	
+	read_value "dual_type"
+	if [ $? -ne 0 ]; then
+		install_log "ERROR" "CHECK_ENV" "read value dual_type errot."
+		((flag=flag+1))	
+	fi
+	dual_type="${RETURN[0]}"
+	
+	if [ ${flag} -gt 0 ]
+	then
+		return 1
+	fi
+}
+
+
+
+

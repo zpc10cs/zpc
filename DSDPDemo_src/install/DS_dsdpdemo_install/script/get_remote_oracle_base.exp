@@ -1,0 +1,29 @@
+#!/usr/bin/expect -f
+
+## get host and password and datafilePath from command line parameters
+proc usage {} {   
+    send_user "parameters numbers is not 2"  
+    exit 1
+}
+if {[llength $argv] != 2} {
+    usage
+}
+set user@host [lindex $argv 0]
+set passwd [lindex $argv 1]
+set timeout 5
+
+#创建远程datafile目录
+spawn ssh ${user@host} "source .profile;echo \$ORACLE_BASE"
+expect {
+	-nocase -re "yes/no" {	    
+	    send -- "yes\r"
+	}
+	-nocase -re "password: " {
+	    send -- "$passwd\r"
+	}   
+}    
+expect eof
+
+## THE END
+
+

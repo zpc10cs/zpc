@@ -1,0 +1,8 @@
+/log
+/logs
+/target
+/.project
+/.settings
+/.classpath
+/lib
+/copy_dependencies.log

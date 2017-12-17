@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="gb2312"?>
+<items name="选择O&amp;M组件">
+	<item_group_list name="component_group" default="">
+		    <item_group name="default" desc="" help="">
+				<sub item_refer="Notepad" checked="true" editable="false"/>
+				<sub item_refer="Vim" checked="true" editable="false"/>
+			</item_group>
+			<item_group name="custom" desc="" help="">
+				<sub item_refer="Notepad" checked="false" editable="true"/>
+				<sub item_refer="Vim" checked="false" editable="true"/>
+			</item_group>
+	</item_group_list>
+	
+	<item_list name="component_list">
+		    <item name="Notepad" desc="Notepad comonent" associate="NOTEPAD" />
+		    <item name="Vim" desc="Vim comonent" associate="VIM" />
+     </item_list>
+</items>
+
+
+

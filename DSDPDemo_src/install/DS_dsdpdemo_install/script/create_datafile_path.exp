@@ -1,0 +1,30 @@
+#!/usr/bin/expect -f
+
+## get host and password and datafilePath from command line parameters
+proc usage {} {   
+    send_user "parameters numbers is not 3"  
+    exit 1
+}
+if {[llength $argv] != 3} {
+    usage
+}
+set user@host [lindex $argv 0]
+set passwd [lindex $argv 1]
+set datafilePath [lindex $argv 2]
+set timeout 5
+
+#创建远程datafile目录
+spawn ssh ${user@host} "mkdir -p $datafilePath;chmod 755 $datafilePath"
+expect {
+	-nocase -re "yes/no" {	    
+	    send -- "yes\r"
+	}
+	-nocase -re "password: " {
+	    send -- "$passwd\r"
+	}   
+}    
+expect eof
+
+## THE END
+
+

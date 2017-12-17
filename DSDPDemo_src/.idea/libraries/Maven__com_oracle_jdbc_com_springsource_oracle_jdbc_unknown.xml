@@ -1,0 +1,13 @@
+<component name="libraryTable">
+  <library name="Maven: com.oracle.jdbc:com.springsource.oracle.jdbc:unknown">
+    <CLASSES>
+      <root url="jar://$MAVEN_REPOSITORY$/com/oracle/jdbc/com.springsource.oracle.jdbc/unknown/com.springsource.oracle.jdbc-unknown.jar!/" />
+    </CLASSES>
+    <JAVADOC>
+      <root url="jar://$MAVEN_REPOSITORY$/com/oracle/jdbc/com.springsource.oracle.jdbc/unknown/com.springsource.oracle.jdbc-unknown-javadoc.jar!/" />
+    </JAVADOC>
+    <SOURCES>
+      <root url="jar://$MAVEN_REPOSITORY$/com/oracle/jdbc/com.springsource.oracle.jdbc/unknown/com.springsource.oracle.jdbc-unknown-sources.jar!/" />
+    </SOURCES>
+  </library>
+</component>

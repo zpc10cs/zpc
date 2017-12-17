@@ -1,0 +1,119 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>com.huawei.jaguar</groupId>
+		<artifactId>dsdp.demo</artifactId>
+		<version>V500R005C00B090</version>
+	</parent>
+	<artifactId>dsdp.demo.service.impl</artifactId>
+
+	<dependencies>
+		<dependency>
+			<groupId>com.huawei.jaguar</groupId>
+			<artifactId>dsdp.demo.service</artifactId>
+			<version>${dsdp.demo.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>com.huawei.jaguar</groupId>
+			<artifactId>dsdp.demo.dao.impl</artifactId>
+			<version>${dsdp.demo.version}</version>
+			<scope>runtime</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>com.huawei.jaguar</groupId>
+			<artifactId>commons.sdk.log</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>com.huawei.jaguar</groupId>
+			<artifactId>commons.sdk.configuration</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>com.huawei.jaguar</groupId>
+			<artifactId>commons.sdk.configuration.impl</artifactId>
+			<scope>runtime</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>com.huawei.jaguar</groupId>
+			<artifactId>commons.sdk.data-integrate</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>com.huawei.jaguar</groupId>
+			<artifactId>commons.sdk.data-integrate.impl</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>com.huawei.jaguar</groupId>
+			<artifactId>commons.sdk.maintenance.api</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>com.huawei.jaguar</groupId>
+			<artifactId>commons.sdk.maintenance.impl</artifactId>
+			<scope>runtime</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>com.huawei.soa.foundation</groupId>
+			<artifactId>com.huawei.soa.foundation.encryption</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>com.huawei.csc.usf</groupId>
+			<artifactId>com.huawei.csc.usf.framework</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>com.huawei.csc.usf</groupId>
+			<artifactId>com.huawei.csc.usf.adapter.dsf</artifactId>
+		</dependency>
+
+		<!-- 如果需要开发rest能力，则需要添加 -->
+		<dependency>
+			<groupId>com.huawei.csc.usf</groupId>
+			<artifactId>com.huawei.csc.usf.restful</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.huawei.csc.usf</groupId>
+			<artifactId>com.huawei.csc.usf.jetty.server</artifactId>
+		</dependency>
+		<!-- 如果需要开发rest能力，则需要添加 -->
+
+		<!-- 如果要集成licen客户端，则需要增加 -->
+		<dependency>
+			<groupId>com.huawei.jaguar</groupId>
+			<artifactId>license.client.api</artifactId>
+			<version>${dsdp.demo.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>com.huawei.jaguar</groupId>
+			<artifactId> license.client.api.impl</artifactId>
+			<scope>runtime</scope>
+			<version>${dsdp.demo.version}</version>
+		</dependency>
+		<!-- 如果要集成licen客户端，则需要增加 -->
+
+		<dependency>
+			<groupId>commons-configuration</groupId>
+			<artifactId>commons-configuration</artifactId>
+		</dependency>
+
+		<dependency>
+			<artifactId>commons-dbcp</artifactId>
+			<groupId>commons-dbcp</groupId>
+		</dependency>
+
+		<dependency>
+			<groupId>com.huawei.jaguar</groupId>
+			<artifactId>dsdp.demo.ut.frame</artifactId>
+			<version>${dsdp.demo.version}</version>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+</project>

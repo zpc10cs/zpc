@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified"
+	attributeFormDefault="unqualified">
+	<xs:element name="fixtures">
+		<xs:annotation>
+			<xs:documentation>启动装置配置文件</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element name="fixture" minOccurs="0" maxOccurs="unbounded">
+					<xs:complexType mixed="true">
+						<xs:attribute name="key" type="xs:ID" use="required"/>
+						<xs:attribute name="index" type="xs:float" use="optional"/>
+						<xs:attribute name="type" use="optional" default="instance">
+							<xs:simpleType>
+								<xs:restriction base="xs:NMTOKEN">
+									<xs:enumeration value="instance"/>
+									<xs:enumeration value="factory"/>
+									<xs:enumeration value="factoryInstance"/>
+								</xs:restriction>
+							</xs:simpleType>
+						</xs:attribute>
+						<xs:attribute name="factory-method" type="xs:string" use="optional"/>
+						<xs:attribute name="bi-index" type="xs:float" use="optional"/>
+						<xs:attribute name="ai-index" type="xs:float" use="optional"/>
+						<xs:attribute name="bd-index" type="xs:float" use="optional"/>
+						<xs:attribute name="ad-index" type="xs:float" use="optional"/>
+						<xs:attribute name="before-init-method" type="xs:string" use="optional"/>
+						<xs:attribute name="after-init-method" type="xs:string" use="optional"/>
+						<xs:attribute name="before-destroy-method" type="xs:string" use="optional"/>
+						<xs:attribute name="after-destroy-method" type="xs:string" use="optional"/>
+						<xs:attribute name="desc" type="xs:string" use="optional"/>
+						<xs:attribute name="throwException" type="xs:boolean" use="optional"/>
+						<xs:attribute name="silent" type="xs:boolean" use="optional"/>
+					</xs:complexType>
+				</xs:element>
+			</xs:sequence>
+		</xs:complexType>
+	</xs:element>
+</xs:schema>

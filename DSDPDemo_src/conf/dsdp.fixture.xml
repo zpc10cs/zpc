@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<fixtures>
+	<fixture key="zkConfig" bi-index="1" ad-index="1" type="factory"
+		before-init-method="init" after-destroy-method="destroy">
+		com.huawei.jaguar.commons.sdk.configuration.config.ConfigerServerStarter
+	</fixture>
+	<fixture key="dsf"  ai-index="1" bd-index="2" type="factory"
+		after-init-method="init" before-destroy-method="destroy">
+		com.huawei.openas.dsf.DSFStartup
+	</fixture>
+</fixtures>
+

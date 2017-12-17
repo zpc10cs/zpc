@@ -1,0 +1,66 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>com.huawei.jaguar</groupId>
+		<artifactId>dsdp.demo</artifactId>
+		<version>V500R005C00B090</version>
+	</parent>
+	<artifactId>dsdp.demo.dao.impl</artifactId>
+
+	<dependencies>
+		<dependency>
+			<groupId>mysql</groupId>
+			<artifactId>mysql-connector-java</artifactId>
+			<version>5.0.5</version>
+		</dependency>
+		<dependency>
+			<groupId>com.huawei.jaguar</groupId>
+			<artifactId>dsdp.demo.dao</artifactId>
+			<version>${dsdp.demo.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>com.huawei.jaguar</groupId>
+			<artifactId>commons.sdk.data-integrate</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>com.huawei.jaguar</groupId>
+			<artifactId>commons.sdk.data-integrate.impl</artifactId>
+			<scope>runtime</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-jdbc</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-tx</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-orm</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.mybatis</groupId>
+			<artifactId>mybatis</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>com.oracle.jdbc</groupId>
+			<artifactId>com.springsource.oracle.jdbc</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>com.huawei.jaguar</groupId>
+			<artifactId>dsdp.demo.ut.frame</artifactId>
+			<version>${dsdp.demo.version}</version>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+</project>

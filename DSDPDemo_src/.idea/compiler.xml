@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CompilerConfiguration">
+    <annotationProcessing>
+      <profile name="Maven default annotation processors profile" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <module name="dsdp.demo.business" />
+        <module name="dsdp.demo.business.impl" />
+        <module name="dsdp.demo.dao" />
+        <module name="dsdp.demo.dao.impl" />
+        <module name="dsdp.demo.integrate.test" />
+        <module name="dsdp.demo.service" />
+        <module name="dsdp.demo.service.impl" />
+        <module name="dsdp.demo.ut.frame" />
+      </profile>
+    </annotationProcessing>
+    <bytecodeTargetLevel>
+      <module name="dsdp.demo" target="1.6" />
+      <module name="dsdp.demo.business" target="1.6" />
+      <module name="dsdp.demo.business.impl" target="1.6" />
+      <module name="dsdp.demo.dao" target="1.6" />
+      <module name="dsdp.demo.dao.impl" target="1.6" />
+      <module name="dsdp.demo.dependency" target="1.6" />
+      <module name="dsdp.demo.integrate.test" target="1.6" />
+      <module name="dsdp.demo.service" target="1.6" />
+      <module name="dsdp.demo.service.impl" target="1.6" />
+      <module name="dsdp.demo.ut.frame" target="1.6" />
+    </bytecodeTargetLevel>
+  </component>
+</project>

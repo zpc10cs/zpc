@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?> 
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN"
+    "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="dsdpdemo.item">
+	<typeAlias alias="User" type="com.huawei.jaguar.dsdp.demo.domain.User" />
+	<typeAlias alias="UserCond" type="com.huawei.jaguar.dsdp.demo.domain.UserCond" />
+	<resultMap class="user" id="userMap">
+		<result property="name" column="name" javaType="java.lang.String" />
+		<result property="sex" column="sex" javaType="java.lang.Integer" />
+		<result property="birth" column="birth" javaType="java.util.Date" />
+		<result property="birthaddr" column="birthaddr" javaType="java.lang.String" />
+	</resultMap>
+
+	<insert id="user.create" parameterClass="user">
+		insert into t_user
+		(name, sex, birth, birthaddr)
+		values
+		(#name#, #sex#, #birth#, #birthaddr#)
+	</insert>
+
+</sqlMap> 

@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8"?>
+<config-project id="DSDP_CONFIG" version="1.0" showDisabledItems="false">	
+ 
+	
+	<config-page id="COMMON" folder="false">
+		<config-set id="hidden_set" level="0" dynamic="0" folder="false">
+			<config id="_currentTaskNeTypeList" type="hidden"  default=""/>
+			<config id="_selectedNETypeList2" type="hidden" default="" level="0" dynamic="0"/>
+			<config id="isAppSelected" type="hidden" default="" level="0" dynamic="0"/>
+			<config id="isDBAppSelected" type="hidden" default="" level="0" dynamic="0"/>
+			<config id="comp_create_sysdb" type="hidden" default="" level="0" dynamic="0"/>
+			<config id="_localMachineNEList" type="hidden" default="" level="0" dynamic="0"/>
+		</config-set>
+		
+		<config-set id="common_config" level="0" dynamic="0" folder="false">	
+			<config id="appuser_compment_ref" default="DSDPDEMO" type="hidden" required="true" >     
+			</config>				
+			<config id="user_group_id" type="int" default="3000" level="0" dynamic="0" required="true"/>
+			<config id="user_group_name" type="string" default="gdsdp" level="0" dynamic="0" required="true">	
+				<validation range="1,32" pattern="/^[a-zA-Z0-9_]*$/"/>
+			</config>			
+			<config id="user_name" type="string" default="dsdpdemo" level="0" dynamic="0" required="true">
+				<validation range="1,8" pattern="/^[a-zA-Z_][a-zA-Z0-9_]*$/"/>
+			</config>
+			<config id="user_password" type="password" default="0D748EC5C5CC6B3F2BC978EEB4FC6423" level="0" dynamic="0" save_encrypt="true" required="true" algorithm="standard" default_value_encrypted="true">
+				<validation range="8,30"/>
+			</config>
+			<config id="user_home" type="string" default="/home/dsdpdemo" level="0" dynamic="0" required="true">
+				<validation range="1,255"/>
+			</config>				
+		</config-set>
+		
+		<config-set id="service_config" level="0" dynamic="0" folder="false">  
+			<!--config id="marketingmgmt_http_port" type="int" default="11010" level="0" dynamic="0" required="true"/-->		
+			<!--config id="marketingmgmt_rpc_port" type="int" default="12010" level="0" dynamic="0" required="true"/-->	
+			<config id="dsdpdemo_service_port" type="int" default="5110" level="0" dynamic="0" required="true"/>
+			<config id="is_use_utc_time" type="enum" default="NO" level="0" dynamic="0" required="true" >
+                <validation range="YES,NO" />
+            </config>
+			<!--<config id="container_jmx_port" type="int" default="5111" level="0" dynamic="0" required="true"/-->
+		</config-set>		
+	</config-page>
+
+	<config-page id="oracle_config" folder="false" >
+		<config-set id="oracle_info" level="0" dynamic="0" folder="false">
+			<config id="dbuser_compment_ref" default="dsdpdemo" type="hidden" required="true" >              
+			</config>
+			<config id="is_need_db" type="enum" default="YES" level="0" dynamic="0" required="true" >
+				<validation range="YES,NO" />
+			</config>
+			<config id="is_create_db_space" type="enum" default="YES" level="0" dynamic="0" dependsID="is_need_db" dependsValue="YES" required="true" >
+				<validation range="YES,NO" />
+			</config>
+			<config id="is_create_db_user" type="enum" default="YES" level="0" dynamic="0" dependsID="is_need_db" dependsValue="YES" required="true" >
+				<validation range="YES,NO" />
+			</config>
+			<config id="oracle_mode" type="enum" default="single" level="0" dynamic="0" required="true">
+				<validation range="dual,single"/>		
+			</config>
+			<config id="oracle_server_type" type="hidden" default="No-RAC" level="0" dynamic="0" required="true">
+				<validation range="RAC,No-RAC"/>
+			</config>
+			<config id="oracle_server_sid" type="string" default="dsdpdb" level="0" dynamic="0"  required="true">
+			</config>
+			<config id="oracle_server_ip" type="ip" default="" level="0" dynamic="0" dependsID="oracle_server_type" dependsValue="No-RAC"  required="true">
+			</config>
+			<config id="remote_oracle_password" type="password" default="" level="0" dependsID="oracle_mode" dependsValue="single"  required="true" save_encrypt="true" algorithm="standard" default_value_encrypted="true">				
+			</config>
+			<config id="oracle_server_standby_ip" type="ip" default="" level="0" dynamic="1" dependsID="oracle_server_type" dependsValue="RAC" required="true">
+			</config>
+			<config id="oracle_server_port" type="string" default="1526" level="0" dynamic="0">
+			</config>			
+			<config id="oracle_dba_username" type="string" default="sys" level="0">
+			</config>
+			<config id="oracle_dba_password" type="password" default="737D67041EA5FC35FFA6077F3F6665C6"  level="0" required="true" save_encrypt="true" algorithm="standard" default_value_encrypted="true"/>		
+			<config id="db_user_name" type="string" default="dsdpdemodb"  level="0" required="true">
+			</config>
+			<config id="db_user_password" type="password" default="1968781254BE181620D2CBF699CADCBF" level="0" required="true" save_encrypt="true" algorithm="standard" default_value_encrypted="true">
+				<validation range="8,30" pattern="/^[a-zA-Z_][a-zA-Z0-9_]*$/"/>
+			</config>
+		</config-set>
+		<config-set id="VG_DATA" level="0" dynamic="0" folder="false">
+			<config id="lv_size_data" type="string" default="8008M" dynamic="0" dependsID="oracle_mode" dependsValue="dual" level="0" required="true">
+				<validation range="1,10" pattern="/^[0-9]+.?[0-9]*[GgMmKk]$/"/>
+			</config>	
+			<config id="dat_tablespace_num" type="int" default="1" level="0" dynamic="0" dependsID="oracle_mode" dependsValue="dual" required="true"> 
+				<validation range="1,65535" />
+			</config>
+		</config-set>
+		<config-set id="VG_IDX" level="0" dynamic="0" folder="false">				
+			<config id="lv_size_idx" type="string" default="8008M" dynamic="0" dependsID="oracle_mode" dependsValue="dual" level="0" required="true">
+				<validation range="1,10" pattern="/^[0-9]+.?[0-9]*[GgMmKk]$/"/>
+			</config>
+			<config id="idx_tablespace_num" type="int" default="1" level="0" dynamic="0" dependsID="oracle_mode" dependsValue="dual" required="true">
+				<validation range="1,65535" />
+			</config>			
+		</config-set>
+	</config-page>
+		
+	<config-page id="basic_app_info" folder="false">
+		<config-set id="logserver_info_config" level="0" dynamic="0" folder="false">
+			<config id="logserver_service_ip" type="string" default="127.0.0.1" level="0" dynamic="0" required="true"/>
+			<config id="logserver_tcp_port" type="int" default="5090" level="0" dynamic="0" required="true"/>
+			<config id="logserver_http_port" type="int" default="5091" level="0" dynamic="0" required="true"/>
+		</config-set>
+		
+		<config-set id="zookeeper_dsf_config" level="0" dynamic="0" folder="false">
+			<config id="zookeeper_service_dsf_ip" type="string" default="" level="0" dynamic="0" required="true"/>
+			<config id="zookeeper_service_dsf_port" type="int" default="6830" level="0" dynamic="0" required="true"/>
+		</config-set>
+		
+		<config-set id="zookeeper_configuration_config" level="0" dynamic="0" folder="false">
+			<config id="zookeeper_service_config_ip" type="string" default="" level="0" dynamic="0" required="true"/>
+			<config id="zookeeper_service_config_port" type="int" default="6830" level="0" dynamic="0" required="true"/>
+		</config-set>
+		
+		<config-set id="zookeeper_auth_config" level="0" dynamic="0" folder="false">
+	    <config id="zookeeper_auth_name" type="string" default="zksdpb2b" level="0" dynamic="0" required="true">
+			<validation range="1,8" pattern="/^[a-zA-Z_][a-zA-Z0-9_]*$/"/>
+		</config>
+		<config id="zookeeper_auth_password" type="password" default="D8D51792B5D3F9704662DA2B6D6C7608818FAF6EBC68936DD4CBA44DE2CDDB1F" level="0" dynamic="0" required="true" save_encrypt="true" algorithm="standard" default_value_encrypted="true">
+			<validation pattern="/^(?!\d+$)(?![a-z]+$)(?![A-Z]+$)(?![^a-zA-Z0-9]+$).{16,}$/" />
+		</config>
+		<config id="zk_auth_switch" type="enum" default="off" level="0" dynamic="0" required="true" >
+			<validation range="on,off" />
+		</config>
+		</config-set>
+		
+		<config-set id="dsf_auth_config" level="0" dynamic="0" folder="false">
+		<config id="dsf_auth_switch" type="enum" default="true" level="0" dynamic="0" required="true" >
+			<validation range="true,false" />
+		</config>
+		<config id="dsf_auth_password" type="password" default="E0D228F683433FB5DD90D17F38C8FC0B2D2D09F467F65000C25FD2E537CFA4FD" dependsID="dsf_auth_switch" dependsValue="true" level="0" dynamic="0" required="true" save_encrypt="true" algorithm="standard" default_value_encrypted="true">
+			<validation range="1,32" pattern="/^(?!\d+$)(?![a-z]+$)(?![A-Z]+$)(?![^a-zA-Z0-9]+$).{16,}$/" />
+		</config>
+		</config-set>
+		<config-set id="redis_info_config" level="0" dynamic="0" folder="false">
+			<config id="dsdpdemo_redis_service_url" type="string" default="10.10.10.10:8080" level="0" dynamic="1" required="true"/>
+		</config-set>
+		
+		<config-set id="uniagent_info_config" level="0" dynamic="0" folder="false">
+			<config id="uoa_server_ip" type="string" default="127.0.0.1" level="0" dynamic="0" required="true"/>	
+			<config id="uoa_server_port" type="int" default="8888" level="0" dynamic="0" required="true"/>	
+		</config-set>
+	</config-page>
+</config-project>
+
+
